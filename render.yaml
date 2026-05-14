@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: line-teaching-bot
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app
+    envVars:
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: BASE_URL
+        sync: false
