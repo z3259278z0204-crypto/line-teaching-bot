@@ -87,6 +87,14 @@ class Database:
             ).fetchall()
             return [dict(r) for r in reversed(rows)]
 
+    def search_by_week(self, user_id, keyword):
+        with self._conn() as c:
+            rows = c.execute(
+                'SELECT week, tools, notes, created_at FROM records WHERE user_id=? AND week LIKE ? ORDER BY id ASC',
+                (user_id, f'%{keyword}%')
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     def delete_last(self, user_id):
         with self._conn() as c:
             row = c.execute(

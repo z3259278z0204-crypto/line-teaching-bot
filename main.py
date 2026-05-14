@@ -52,6 +52,8 @@ def process(user_id, text):
             '📚 教具記錄小幫手\n\n'
             '🔸 記錄教具 → 開始新增記錄\n'
             '🔸 查看記錄 → 顯示最近5筆\n'
+            '🔸 查第3週 → 查詢指定週次\n'
+            '🔸 查5/14 → 查詢指定日期\n'
             '🔸 匯出Excel → 產生下載連結\n'
             '🔸 刪除最後一筆 → 刪除最新記錄\n'
             '🔸 取消 → 取消目前操作'
@@ -66,6 +68,10 @@ def process(user_id, text):
 
     if text in ('查看記錄', '我的記錄', '記錄列表'):
         return show_recent(user_id)
+
+    if text.startswith('查') and len(text) > 1:
+        keyword = text[1:].strip()
+        return search_records(user_id, keyword)
 
     if text in ('刪除最後一筆', '刪除'):
         deleted = db.delete_last(user_id)
@@ -118,6 +124,17 @@ def export_excel(user_id):
     db.save_token(token, filepath)
     url = f'{BASE_URL}/download/{token}'
     return f'✅ Excel 已準備好！\n\n📥 點此下載（10分鐘內有效）：\n{url}'
+
+
+def search_records(user_id, keyword):
+    records = db.search_by_week(user_id, keyword)
+    if not records:
+        return f'🔍 找不到「{keyword}」的記錄。\n\n試試：查第3週、查5/14'
+    lines = [f'🔍 「{keyword}」的查詢結果（{len(records)}筆）：\n']
+    for r in records:
+        notes = r['notes'] if r['notes'] else '無'
+        lines.append(f'📅 {r["week"]}\n🧰 {r["tools"]}\n📝 {notes}\n')
+    return '\n'.join(lines)
 
 
 def show_recent(user_id):
