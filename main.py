@@ -57,7 +57,7 @@ def process(user_id, text):
             '🔸 取消 → 取消目前操作'
         )
 
-    if text in ('記錄教具', '新增', '新增教具', '記錄', 'start'):
+    if text in ('記錄教具', '紀錄教具', '新增', '新增教具', '記錄', '紀錄', 'start'):
         db.set_state(user_id, 'waiting_week', None, None)
         return '📅 請問這是第幾週或哪個日期？\n（例如：第3週、5/14）'
 
