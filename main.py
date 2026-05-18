@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from flask import Flask, request, abort, send_file
 from linebot.v3 import WebhookHandler
@@ -11,6 +12,8 @@ from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from database import Database
 from excel_export import generate_excel
 from calendar_query import query_schedule
+from calendar_add import add_event
+from ai_chat import ask_ai
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -51,15 +54,17 @@ def process(user_id, text):
     if text in ('說明', '幫助', 'help', '?', '？'):
         return (
             '📚 教具記錄小幫手\n\n'
-            '🔸 今天行程 → 查今日 Google 行程\n'
-            '🔸 明天行程 → 查明日行程\n'
-            '🔸 記錄教具 → 開始新增記錄\n'
-            '🔸 查看記錄 → 顯示最近5筆\n'
-            '🔸 查第3週 → 查詢指定週次\n'
-            '🔸 查5/14 → 查詢指定日期\n'
-            '🔸 匯出Excel → 產生下載連結\n'
-            '🔸 刪除最後一筆 → 刪除最新記錄\n'
-            '🔸 取消 → 取消目前操作'
+            '📅 行程\n'
+            '🔸 今天行程 / 明天行程\n'
+            '🔸 新增行程 明天10點 體能課\n\n'
+            '🧰 教具記錄\n'
+            '🔸 記錄教具 → 開始新增\n'
+            '🔸 查看記錄 → 最近5筆\n'
+            '🔸 查第3週 / 查5/14\n'
+            '🔸 匯出Excel → 下載連結\n'
+            '🔸 刪除最後一筆\n\n'
+            '🤖 AI 助理\n'
+            '🔸 直接說任何問題，AI 自動回答'
         )
 
     if text in ('今天行程', '今天', '查行程', '行程', '今日行程'):
@@ -70,6 +75,14 @@ def process(user_id, text):
 
     if text in ('後天行程', '後天'):
         return query_schedule(2)
+
+    if text.startswith('新增行程') or text.startswith('加行程') or text.startswith('建立行程'):
+        raw = re.sub(r'^(新增行程|加行程|建立行程)\s*', '', text).strip()
+        if not raw:
+            return ('請輸入行程資訊，格式如下：\n\n'
+                    '新增行程 明天10點 體能課\n'
+                    '新增行程 5/20 下午3點 家長會 地點：學校')
+        return add_event(raw)
 
     if text in ('記錄教具', '紀錄教具', '新增', '新增教具', '記錄', '紀錄', 'start'):
         db.set_state(user_id, 'waiting_week', None, None)
@@ -119,11 +132,8 @@ def process(user_id, text):
             '繼續說「記錄教具」可新增，\n說「匯出Excel」可下載。'
         )
 
-    return (
-        '嗨！我是你的教具記錄小幫手 📚\n\n'
-        '說「記錄教具」開始記錄\n'
-        '說「說明」看所有功能'
-    )
+    # 任何不認識的訊息交給 AI
+    return ask_ai(text)
 
 
 def export_excel(user_id):
