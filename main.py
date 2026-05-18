@@ -10,6 +10,7 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from database import Database
 from excel_export import generate_excel
+from calendar_query import query_schedule
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -50,6 +51,8 @@ def process(user_id, text):
     if text in ('說明', '幫助', 'help', '?', '？'):
         return (
             '📚 教具記錄小幫手\n\n'
+            '🔸 今天行程 → 查今日 Google 行程\n'
+            '🔸 明天行程 → 查明日行程\n'
             '🔸 記錄教具 → 開始新增記錄\n'
             '🔸 查看記錄 → 顯示最近5筆\n'
             '🔸 查第3週 → 查詢指定週次\n'
@@ -58,6 +61,15 @@ def process(user_id, text):
             '🔸 刪除最後一筆 → 刪除最新記錄\n'
             '🔸 取消 → 取消目前操作'
         )
+
+    if text in ('今天行程', '今天', '查行程', '行程', '今日行程'):
+        return query_schedule(0)
+
+    if text in ('明天行程', '明天', '明日行程'):
+        return query_schedule(1)
+
+    if text in ('後天行程', '後天'):
+        return query_schedule(2)
 
     if text in ('記錄教具', '紀錄教具', '新增', '新增教具', '記錄', '紀錄', 'start'):
         db.set_state(user_id, 'waiting_week', None, None)
