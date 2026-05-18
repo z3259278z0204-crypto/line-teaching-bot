@@ -106,6 +106,18 @@ class Database:
                 return f'{row["week"]} - {row["tools"]}'
             return None
 
+    def set_delete_refs(self, user_id, refs_json):
+        with self._conn() as c:
+            c.execute(
+                'INSERT OR REPLACE INTO states VALUES (?,?,?,?)',
+                (user_id, 'waiting_delete', refs_json, None)
+            )
+
+    def get_delete_refs(self, user_id):
+        with self._conn() as c:
+            row = c.execute('SELECT temp_week FROM states WHERE user_id=?', (user_id,)).fetchone()
+            return row['temp_week'] if row else None
+
     def save_token(self, token, filepath):
         with self._conn() as c:
             c.execute('INSERT OR REPLACE INTO tokens VALUES (?,?,datetime("now"))', (token, filepath))

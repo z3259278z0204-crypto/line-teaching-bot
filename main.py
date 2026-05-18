@@ -11,8 +11,10 @@ from linebot.v3.messaging import (
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from database import Database
 from excel_export import generate_excel
-from calendar_query import query_schedule
+import json as _json
+from calendar_query import query_schedule, query_schedule_date
 from calendar_add import add_event
+from calendar_delete import list_upcoming, delete_event
 from ai_chat import ask_ai
 
 app = Flask(__name__)
@@ -56,7 +58,9 @@ def process(user_id, text):
             '📚 教具記錄小幫手\n\n'
             '📅 行程\n'
             '🔸 今天行程 / 明天行程\n'
-            '🔸 新增行程 明天10點 體能課\n\n'
+            '🔸 5/20行程 → 查特定日期\n'
+            '🔸 新增行程 明天10點 體能課\n'
+            '🔸 刪除行程 → 列出可刪行程\n\n'
             '🧰 教具記錄\n'
             '🔸 記錄教具 → 開始新增\n'
             '🔸 查看記錄 → 最近5筆\n'
@@ -75,6 +79,17 @@ def process(user_id, text):
 
     if text in ('後天行程', '後天'):
         return query_schedule(2)
+
+    if text in ('刪除行程', '刪行程'):
+        msg, refs = list_upcoming(7)
+        if refs:
+            db.set_delete_refs(user_id, _json.dumps(refs))
+        return msg
+
+    # 查特定日期行程：例如「查5/20行程」、「5/20行程」、「查行程5/20」
+    date_pattern = re.search(r'(\d{1,2}/\d{1,2})', text)
+    if date_pattern and '行程' in text:
+        return query_schedule_date(date_pattern.group(1))
 
     if text.startswith('新增行程') or text.startswith('加行程') or text.startswith('建立行程'):
         raw = re.sub(r'^(新增行程|加行程|建立行程)\s*', '', text).strip()
@@ -109,6 +124,21 @@ def process(user_id, text):
 
     # 狀態機
     state = db.get_state(user_id)
+
+    if state == 'waiting_delete':
+        refs_json = db.get_delete_refs(user_id)
+        if text.isdigit() and refs_json:
+            idx = int(text) - 1
+            refs = _json.loads(refs_json)
+            if 0 <= idx < len(refs):
+                cal_id, event_id, title = refs[idx]
+                ok = delete_event(cal_id, event_id)
+                db.clear_state(user_id)
+                return f'🗑️ 已刪除：{title}' if ok else f'⚠️ 刪除失敗：{title}'
+            db.clear_state(user_id)
+            return '⚠️ 編號超出範圍，已取消。'
+        db.clear_state(user_id)
+        return '已取消刪除。'
 
     if state == 'waiting_week':
         db.set_state(user_id, 'waiting_tools', text, None)

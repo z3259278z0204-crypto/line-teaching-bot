@@ -69,6 +69,30 @@ def _format(events, label):
     return '\n'.join(lines)
 
 
+def query_schedule_date(date_str):
+    """date_str like '5/20' or '12/3'"""
+    import re
+    m = re.match(r'(\d{1,2})/(\d{1,2})', date_str.strip())
+    if not m:
+        return '⚠️ 日期格式錯誤，請用 MM/DD（例如 5/20）'
+    try:
+        access_token = _get_access_token()
+        now = datetime.now(TAIWAN_TZ)
+        month, day = int(m.group(1)), int(m.group(2))
+        target = now.replace(month=month, day=day)
+        if (target.date() - now.date()).days < -180:
+            target = target.replace(year=target.year + 1)
+        weekday_map = {
+            'Monday': '週一', 'Tuesday': '週二', 'Wednesday': '週三',
+            'Thursday': '週四', 'Friday': '週五', 'Saturday': '週六', 'Sunday': '週日'
+        }
+        label = target.strftime('%m/%d（') + weekday_map.get(target.strftime('%A'), '') + '）'
+        events = _fetch_events(access_token, target)
+        return _format(events, label)
+    except Exception as e:
+        return f'⚠️ 無法取得行程：{str(e)}'
+
+
 def query_schedule(offset_days=0):
     try:
         access_token = _get_access_token()
