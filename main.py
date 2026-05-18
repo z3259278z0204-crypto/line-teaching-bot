@@ -84,7 +84,8 @@ def process(user_id, text):
                     '新增行程 5/20 下午3點 家長會 地點：學校')
         return add_event(raw)
 
-    if text in ('記錄教具', '紀錄教具', '新增', '新增教具', '記錄', '紀錄', 'start'):
+    if (text in ('新增', '新增教具', 'start')
+            or text.startswith('記錄') or text.startswith('紀錄')):
         db.set_state(user_id, 'waiting_week', None, None)
         return '📅 請問這是第幾週或哪個日期？\n（例如：第3週、5/14）'
 
