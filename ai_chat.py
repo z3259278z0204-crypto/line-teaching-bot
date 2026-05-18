@@ -16,7 +16,7 @@ def ask_ai(question):
 
     url = (
         'https://generativelanguage.googleapis.com/v1beta/models/'
-        f'gemini-1.5-flash:generateContent?key={api_key}'
+        f'gemini-2.0-flash:generateContent?key={api_key}'
     )
     body = json.dumps({
         'contents': [
@@ -33,5 +33,8 @@ def ask_ai(question):
         with urllib.request.urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read())
             return result['candidates'][0]['content']['parts'][0]['text'].strip()
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode('utf-8', errors='ignore')
+        return f'⚠️ AI 錯誤({e.code})：{err_body[:200]}'
     except Exception as e:
-        return f'⚠️ AI 暫時無法回應，請稍後再試。'
+        return f'⚠️ AI 連線失敗：{type(e).__name__}: {str(e)[:100]}'
