@@ -92,8 +92,10 @@ def process(user_id, text):
         return msg
 
     # 查特定日期行程：例如「查5/20行程」、「5/20行程」、「查行程5/20」
+    # 排除掉新增/加/建立/刪除開頭，避免攔截到寫入指令
     date_pattern = re.search(r'(\d{1,2}/\d{1,2})', text)
-    if date_pattern and '行程' in text:
+    if (date_pattern and '行程' in text
+            and not text.startswith(('新增', '加行程', '建立', '刪除', '刪'))):
         return query_schedule_date(date_pattern.group(1))
 
     if text.startswith('新增行程') or text.startswith('加行程') or text.startswith('建立行程'):
