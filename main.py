@@ -24,6 +24,11 @@ BASE_URL = os.environ.get('BASE_URL', 'http://localhost:5000')
 db = Database()
 
 
+@app.route('/ping')
+def ping():
+    return 'pong', 200
+
+
 @app.route('/webhook', methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature', '')
