@@ -88,6 +88,8 @@ def add_event(raw_text):
             'summary': title,
             'start': {'dateTime': start.isoformat(), 'timeZone': 'Asia/Taipei'},
             'end': {'dateTime': end.isoformat(), 'timeZone': 'Asia/Taipei'},
+            'colorId': '3',
+            'reminders': {'useDefault': False, 'overrides': []},
         }
         if location:
             body['location'] = location
