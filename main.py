@@ -83,15 +83,15 @@ def process(user_id, text):
             '🔸 直接說任何問題，AI 自動回答'
         )
 
-    if text in ('本月薪資', '薪資', '這個月薪資'):
+    if text in ('本月薪資', '薪資', '這個月薪資', '查薪資', '看薪資', '本月收入'):
         return monthly_summary()
 
-    if text in ('上月薪資', '上個月薪資'):
+    if text in ('上月薪資', '上個月薪資', '查上月薪資'):
         now = datetime.now(TAIWAN_TZ)
         prev = now.replace(day=1) - timedelta(days=1)
         return monthly_summary(prev.year, prev.month)
 
-    if text in ('價目表', '查價', '價格'):
+    if text in ('價目表', '查價', '價格', '看價目表', '看價格', '查價目表'):
         return list_prices()
 
     if text in ('今天行程', '今天', '查行程', '行程', '今日行程'):
