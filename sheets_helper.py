@@ -119,6 +119,53 @@ def delete_row_by_match(sheet_name, match_col, match_value):
     return True
 
 
+def delete_row_by_dict(sheet_name, criteria):
+    """以多欄條件刪除第一筆全部符合的資料列。criteria = {欄位名: 值}"""
+    sid = _spreadsheet_id()
+    rng = urllib.parse.quote(sheet_name)
+    data = _request(f'{SHEETS_BASE}/{sid}/values/{rng}')
+    values = data.get('values', [])
+    if not values:
+        return False
+    headers = values[0]
+    col_idx = {}
+    for col_name in criteria:
+        if col_name not in headers:
+            return False
+        col_idx[col_name] = headers.index(col_name)
+
+    target_row = None
+    for i, row in enumerate(values[1:], start=2):
+        ok = True
+        for col_name, expected in criteria.items():
+            idx = col_idx[col_name]
+            actual = row[idx].strip() if len(row) > idx else ''
+            if actual != str(expected).strip():
+                ok = False
+                break
+        if ok:
+            target_row = i
+            break
+    if not target_row:
+        return False
+
+    sheet_id = _get_sheet_id(sheet_name)
+    body = {
+        'requests': [{
+            'deleteDimension': {
+                'range': {
+                    'sheetId': sheet_id,
+                    'dimension': 'ROWS',
+                    'startIndex': target_row - 1,
+                    'endIndex': target_row
+                }
+            }
+        }]
+    }
+    _request(f'{SHEETS_BASE}/{sid}:batchUpdate', method='POST', body=body)
+    return True
+
+
 def _get_sheet_id(sheet_name):
     sid = _spreadsheet_id()
     data = _request(f'{SHEETS_BASE}/{sid}?fields=sheets.properties')

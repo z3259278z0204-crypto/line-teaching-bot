@@ -17,7 +17,7 @@ from excel_export import generate_excel
 import json as _json
 from calendar_query import query_schedule, query_schedule_date
 from calendar_add import add_event
-from calendar_delete import list_upcoming, delete_event
+from calendar_delete import list_upcoming, delete_event, find_and_delete
 from ai_chat import ask_ai
 from salary import monthly_summary, list_prices
 
@@ -69,7 +69,8 @@ def process(user_id, text):
             '🔸 今天行程 / 明天行程\n'
             '🔸 5/20行程 → 查特定日期\n'
             '🔸 新增行程 明天10點 體能課\n'
-            '🔸 刪除行程 → 列出可刪行程\n\n'
+            '🔸 刪除行程 → 列出可刪行程\n'
+            '🔸 刪除行程 5/27 16:15 輔大自主課（直接刪）\n\n'
             '💰 薪資\n'
             '🔸 本月薪資 / 上月薪資\n'
             '🔸 價目表 → 查目前價格設定\n\n'
@@ -105,6 +106,14 @@ def process(user_id, text):
 
     if text in ('刪除行程', '刪行程'):
         msg, refs = list_upcoming(7)
+        if refs:
+            db.set_delete_refs(user_id, _json.dumps(refs))
+        return msg
+
+    # 帶參數的刪除：刪除行程 5/27 16:15 輔大自主課
+    if text.startswith('刪除行程') or text.startswith('刪行程'):
+        query = re.sub(r'^(刪除行程|刪行程)\s*', '', text).strip()
+        msg, refs = find_and_delete(query)
         if refs:
             db.set_delete_refs(user_id, _json.dumps(refs))
         return msg
