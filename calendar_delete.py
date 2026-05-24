@@ -58,14 +58,19 @@ def list_upcoming(days=7):
         refs = []
         for i, (cal_id, e) in enumerate(events_with_cal, 1):
             start = e.get('start', {})
+            event_date = ''
+            event_time = ''
             if 'dateTime' in start:
                 t = datetime.fromisoformat(start['dateTime']).astimezone(TAIWAN_TZ)
-                time_str = t.strftime('%m/%d %H:%M')
+                time_display = t.strftime('%m/%d %H:%M')
+                event_date = t.strftime('%Y-%m-%d')
+                event_time = t.strftime('%H:%M')
             else:
-                time_str = start.get('date', '')
+                time_display = start.get('date', '')
+                event_date = start.get('date', '')
             title = e.get('summary', '（無標題）')
-            lines.append(f'{i}. {time_str}　{title}')
-            refs.append((cal_id, e['id'], title))
+            lines.append(f'{i}. {time_display}　{title}')
+            refs.append((cal_id, e['id'], title, event_date, event_time))
 
         lines.append('\n回覆數字刪除，或「取消」中止。')
         return '\n'.join(lines), refs
@@ -186,7 +191,7 @@ def find_and_delete(query):
         refs = []
         for i, (cid, eid, t, ed, et) in enumerate(matches, 1):
             lines.append(f'{i}. {ed} {et} {t}')
-            refs.append((cid, eid, t))
+            refs.append((cid, eid, t, ed, et))
         lines.append('\n回覆數字刪除，或「取消」中止。')
         return '\n'.join(lines), refs
 

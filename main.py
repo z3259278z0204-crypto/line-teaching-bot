@@ -173,10 +173,24 @@ def process(user_id, text):
             idx = int(text) - 1
             refs = _json.loads(refs_json)
             if 0 <= idx < len(refs):
-                cal_id, event_id, title = refs[idx]
+                ref = refs[idx]
+                cal_id, event_id, title = ref[0], ref[1], ref[2]
+                event_date = ref[3] if len(ref) > 3 else None
+                event_time = ref[4] if len(ref) > 4 else None
                 ok = delete_event(cal_id, event_id)
                 db.clear_state(user_id)
-                return f'🗑️ 已刪除：{title}' if ok else f'⚠️ 刪除失敗：{title}'
+                salary_msg = ''
+                if ok and event_date and event_time:
+                    try:
+                        from sheets_helper import delete_row_by_dict
+                        ed_slash = event_date.replace('-', '/')
+                        if delete_row_by_dict('薪資', {
+                            '日期': ed_slash, '時間': event_time, '標題': title
+                        }):
+                            salary_msg = '\n💸 對應薪資記錄已移除'
+                    except Exception:
+                        pass
+                return f'🗑️ 已刪除：{title}{salary_msg}' if ok else f'⚠️ 刪除失敗：{title}'
             db.clear_state(user_id)
             return '⚠️ 編號超出範圍，已取消。'
         db.clear_state(user_id)
