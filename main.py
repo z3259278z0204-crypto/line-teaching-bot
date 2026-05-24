@@ -137,6 +137,14 @@ def process(user_id, text):
 
     if text.startswith('查') and len(text) > 1:
         keyword = text[1:].strip()
+        if keyword in ('薪資', '本月薪資', '本月收入', '收入', '這個月薪資'):
+            return monthly_summary()
+        if keyword in ('上月薪資', '上個月薪資'):
+            now = datetime.now(TAIWAN_TZ)
+            prev = now.replace(day=1) - timedelta(days=1)
+            return monthly_summary(prev.year, prev.month)
+        if keyword in ('價目表', '價格'):
+            return list_prices()
         return search_records(user_id, keyword)
 
     if text in ('刪除最後一筆', '刪除'):
