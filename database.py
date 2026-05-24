@@ -1,8 +1,11 @@
 import sqlite3
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from sheets_helper import read_all, append_row, delete_row_by_match
 
 DB_PATH = os.environ.get('DB_PATH', '/tmp/teaching_tools.db')
+TAIWAN_TZ = timezone(timedelta(hours=8))
+EQUIPMENT_SHEET = '器材'
 
 
 class Database:
@@ -65,46 +68,44 @@ class Database:
             c.execute('DELETE FROM states WHERE user_id=?', (user_id,))
 
     def save_record(self, user_id, week, tools, notes):
-        with self._conn() as c:
-            c.execute(
-                'INSERT INTO records (user_id, week, tools, notes) VALUES (?,?,?,?)',
-                (user_id, week, tools, notes)
-            )
+        append_row(EQUIPMENT_SHEET, {
+            '日期': datetime.now(TAIWAN_TZ).strftime('%Y/%m/%d %H:%M'),
+            '週次': week,
+            '教具': tools,
+            '備註': notes or '',
+            'UserID': user_id,
+        })
+
+    def _user_rows(self, user_id):
+        rows = read_all(EQUIPMENT_SHEET)
+        return [r for r in rows if (r.get('UserID') or '').strip() == user_id]
 
     def get_all_records(self, user_id):
-        with self._conn() as c:
-            rows = c.execute(
-                'SELECT week, tools, notes, created_at FROM records WHERE user_id=? ORDER BY id ASC',
-                (user_id,)
-            ).fetchall()
-            return [dict(r) for r in rows]
+        return [{
+            'week': r.get('週次', ''),
+            'tools': r.get('教具', ''),
+            'notes': r.get('備註', ''),
+            'created_at': r.get('日期', ''),
+        } for r in self._user_rows(user_id)]
 
     def get_recent(self, user_id, limit=5):
-        with self._conn() as c:
-            rows = c.execute(
-                'SELECT week, tools, notes, created_at FROM records WHERE user_id=? ORDER BY id DESC LIMIT ?',
-                (user_id, limit)
-            ).fetchall()
-            return [dict(r) for r in reversed(rows)]
+        all_rows = self.get_all_records(user_id)
+        return all_rows[-limit:]
 
     def search_by_week(self, user_id, keyword):
-        with self._conn() as c:
-            rows = c.execute(
-                'SELECT week, tools, notes, created_at FROM records WHERE user_id=? AND week LIKE ? ORDER BY id ASC',
-                (user_id, f'%{keyword}%')
-            ).fetchall()
-            return [dict(r) for r in rows]
+        return [r for r in self.get_all_records(user_id)
+                if keyword in r['week']]
 
     def delete_last(self, user_id):
-        with self._conn() as c:
-            row = c.execute(
-                'SELECT id, week, tools FROM records WHERE user_id=? ORDER BY id DESC LIMIT 1',
-                (user_id,)
-            ).fetchone()
-            if row:
-                c.execute('DELETE FROM records WHERE id=?', (row['id'],))
-                return f'{row["week"]} - {row["tools"]}'
+        user_rows = self._user_rows(user_id)
+        if not user_rows:
             return None
+        last = user_rows[-1]
+        date_val = last.get('日期', '')
+        ok = delete_row_by_match(EQUIPMENT_SHEET, '日期', date_val)
+        if ok:
+            return f'{last.get("週次", "")} - {last.get("教具", "")}'
+        return None
 
     def set_delete_refs(self, user_id, refs_json):
         with self._conn() as c:

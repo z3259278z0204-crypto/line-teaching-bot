@@ -6,7 +6,7 @@ from openpyxl.utils import get_column_letter
 def generate_excel(records, filepath):
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = '教具記錄'
+    ws.title = '器材記錄'
 
     header_fill = PatternFill('solid', fgColor='4472C4')
     header_font = Font(color='FFFFFF', bold=True, size=12)
@@ -16,7 +16,7 @@ def generate_excel(records, filepath):
     thin = Side(style='thin')
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    headers = ['週次／日期', '教具名稱', '活動目標／備註', '記錄日期']
+    headers = ['週次／日期', '器材名稱', '活動目標／備註', '記錄日期']
     widths = [18, 40, 48, 16]
 
     for col, (h, w) in enumerate(zip(headers, widths), 1):

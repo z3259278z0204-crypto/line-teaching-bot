@@ -1,7 +1,10 @@
 import os
 import re
 import uuid
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, abort, send_file
+
+TAIWAN_TZ = timezone(timedelta(hours=8))
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
@@ -16,6 +19,7 @@ from calendar_query import query_schedule, query_schedule_date
 from calendar_add import add_event
 from calendar_delete import list_upcoming, delete_event
 from ai_chat import ask_ai
+from salary import monthly_summary, list_prices
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -60,14 +64,17 @@ def process(user_id, text):
     # 全域指令（任何狀態都優先）
     if text in ('說明', '幫助', 'help', '?', '？'):
         return (
-            '📚 教具記錄小幫手\n\n'
+            '📚 葡萄助手\n\n'
             '📅 行程\n'
             '🔸 今天行程 / 明天行程\n'
             '🔸 5/20行程 → 查特定日期\n'
             '🔸 新增行程 明天10點 體能課\n'
             '🔸 刪除行程 → 列出可刪行程\n\n'
-            '🧰 教具記錄\n'
-            '🔸 記錄教具 → 開始新增\n'
+            '💰 薪資\n'
+            '🔸 本月薪資 / 上月薪資\n'
+            '🔸 價目表 → 查目前價格設定\n\n'
+            '🧰 器材記錄\n'
+            '🔸 記錄器材 → 開始新增\n'
             '🔸 查看記錄 → 最近5筆\n'
             '🔸 查第3週 / 查5/14\n'
             '🔸 匯出Excel → 下載連結\n'
@@ -75,6 +82,17 @@ def process(user_id, text):
             '🤖 AI 助理\n'
             '🔸 直接說任何問題，AI 自動回答'
         )
+
+    if text in ('本月薪資', '薪資', '這個月薪資'):
+        return monthly_summary()
+
+    if text in ('上月薪資', '上個月薪資'):
+        now = datetime.now(TAIWAN_TZ)
+        prev = now.replace(day=1) - timedelta(days=1)
+        return monthly_summary(prev.year, prev.month)
+
+    if text in ('價目表', '查價', '價格'):
+        return list_prices()
 
     if text in ('今天行程', '今天', '查行程', '行程', '今日行程'):
         return query_schedule(0)
@@ -106,8 +124,8 @@ def process(user_id, text):
                     '新增行程 5/20 下午3點 家長會 地點：學校')
         return add_event(raw)
 
-    if (text in ('新增', '新增教具', 'start')
-            or text.startswith('記錄') or text.startswith('紀錄')):
+    if (text in ('新增', '新增教具', '新增器材', 'start')
+            or text.startswith(('記錄', '紀錄'))):
         db.set_state(user_id, 'waiting_week', None, None)
         return '📅 請問這是第幾週或哪個日期？\n（例如：第3週、5/14）'
 
@@ -127,7 +145,7 @@ def process(user_id, text):
 
     if text in ('取消', 'cancel'):
         db.clear_state(user_id)
-        return '已取消目前操作。說「記錄教具」可重新開始。'
+        return '已取消目前操作。說「記錄器材」可重新開始。'
 
     # 狀態機
     state = db.get_state(user_id)
@@ -154,7 +172,7 @@ def process(user_id, text):
     if state == 'waiting_tools':
         week = db.get_temp_week(user_id)
         db.set_state(user_id, 'waiting_notes', week, text)
-        return f'✅ 教具：{text}\n\n📝 活動目標或備註？\n（直接說「無」可跳過）'
+        return f'✅ 器材：{text}\n\n📝 活動目標或備註？\n（直接說「無」可跳過）'
 
     if state == 'waiting_notes':
         week, tools = db.get_temp_data(user_id)
@@ -167,7 +185,7 @@ def process(user_id, text):
             f'📅 {week}\n'
             f'🧰 {tools}\n'
             f'📝 {notes_display}\n\n'
-            '繼續說「記錄教具」可新增，\n說「匯出Excel」可下載。'
+            '繼續說「記錄器材」可新增，\n說「匯出Excel」可下載。'
         )
 
     # 任何不認識的訊息交給 AI
@@ -177,7 +195,7 @@ def process(user_id, text):
 def export_excel(user_id):
     records = db.get_all_records(user_id)
     if not records:
-        return '⚠️ 目前沒有記錄，請先說「記錄教具」新增。'
+        return '⚠️ 目前沒有記錄，請先說「記錄器材」新增。'
     token = uuid.uuid4().hex[:10]
     filepath = f'/tmp/export_{token}.xlsx'
     generate_excel(records, filepath)
@@ -200,7 +218,7 @@ def search_records(user_id, keyword):
 def show_recent(user_id):
     records = db.get_recent(user_id, 5)
     if not records:
-        return '目前沒有記錄，說「記錄教具」開始新增吧！'
+        return '目前沒有記錄，說「記錄器材」開始新增吧！'
     lines = ['📋 最近5筆記錄：\n']
     for r in records:
         notes = r['notes'] if r['notes'] else '無'
@@ -222,7 +240,7 @@ def download(token):
     return send_file(
         filepath,
         as_attachment=True,
-        download_name='教具記錄.xlsx',
+        download_name='器材記錄.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 

@@ -4,6 +4,7 @@ import re
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone, timedelta
+from sheets_helper import find_price, append_row
 
 TAIWAN_TZ = timezone(timedelta(hours=8))
 CALENDAR_ID = 'z3259278z0204@gmail.com'
@@ -106,6 +107,27 @@ def add_event(raw_text):
         time_str = start.strftime('%H:%M')
         date_str = start.strftime('%m/%d')
         loc_str = f'\n📍 {location}' if location else ''
-        return f'✅ 行程已新增！\n\n📅 {date_str} {time_str}\n📌 {title}{loc_str}'
+
+        # 自動依價目表寫入薪資
+        salary_str = ''
+        try:
+            price, keyword = find_price(title)
+            if price is not None:
+                append_row('薪資', {
+                    '日期': start.strftime('%Y/%m/%d'),
+                    '時間': time_str,
+                    '標題': title,
+                    '單價': price,
+                    '備註': f'匹配關鍵字：{keyword}',
+                })
+                salary_str = f'\n💰 已記薪資 ${price}（{keyword}）'
+            elif keyword:
+                salary_str = f'\n⚠️ 價目表「{keyword}」單價格式錯誤，未記薪資'
+            else:
+                salary_str = '\n⚠️ 價目表查無此課程，未記薪資'
+        except Exception as sex:
+            salary_str = f'\n⚠️ 薪資寫入失敗：{str(sex)[:50]}'
+
+        return f'✅ 行程已新增！\n\n📅 {date_str} {time_str}\n📌 {title}{loc_str}{salary_str}'
     except Exception as ex:
         return f'⚠️ 新增失敗：{str(ex)}'
