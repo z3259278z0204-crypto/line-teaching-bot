@@ -33,6 +33,12 @@ def ping():
     return 'pong', 200
 
 
+@app.route('/setup-richmenu')
+def setup_richmenu():
+    from rich_menu import setup
+    return setup(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
 @app.route('/webhook', methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature', '')
