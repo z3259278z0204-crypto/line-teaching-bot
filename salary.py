@@ -2,6 +2,7 @@ from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 from sheets_helper import read_all
 from fuel import monthly_total as fuel_monthly_total
+from parking import monthly_total as parking_monthly_total
 
 TAIWAN_TZ = timezone(timedelta(hours=8))
 
@@ -56,9 +57,16 @@ def monthly_summary(year=None, month=None):
         fuel_amt, fuel_l, fuel_n = fuel_monthly_total(year, month)
     except Exception:
         fuel_amt, fuel_n = 0, 0
-    if fuel_amt > 0:
-        net = total - fuel_amt
-        lines.append(f'⛽ 油費：−${fuel_amt:,}（{fuel_n} 次）')
+    try:
+        park_amt, park_n = parking_monthly_total(year, month)
+    except Exception:
+        park_amt, park_n = 0, 0
+    if fuel_amt > 0 or park_amt > 0:
+        if fuel_amt > 0:
+            lines.append(f'⛽ 油費：−${fuel_amt:,}（{fuel_n} 次）')
+        if park_amt > 0:
+            lines.append(f'🅿️ 停車：−${park_amt:,}（{park_n} 次）')
+        net = total - fuel_amt - park_amt
         lines.append(f'💎 淨薪：${net:,}')
     return '\n'.join(lines)
 
@@ -106,17 +114,29 @@ def monthly_chart(year=None, month=None):
         fuel_amt, _, fuel_n = fuel_monthly_total(year, month)
     except Exception:
         fuel_amt, fuel_n = 0, 0
+    try:
+        park_amt, park_n = parking_monthly_total(year, month)
+    except Exception:
+        park_amt, park_n = 0, 0
     if fuel_amt > 0:
         bar_len_fuel = max(1, round(fuel_amt / max_amount * bar_max))
         lines.append('⛽ 油費')
         lines.append(f'{"▒" * bar_len_fuel} −${fuel_amt:,} ({fuel_n}次)')
+        lines.append('')
+    if park_amt > 0:
+        bar_len_park = max(1, round(park_amt / max_amount * bar_max))
+        lines.append('🅿️ 停車')
+        lines.append(f'{"▒" * bar_len_park} −${park_amt:,} ({park_n}次)')
         lines.append('')
 
     lines.append('━━━━━━━━━━')
     lines.append(f'💵 毛薪：${total:,} / {count} 堂')
     if fuel_amt > 0:
         lines.append(f'⛽ 油費：−${fuel_amt:,}')
-        lines.append(f'💎 淨薪：${total - fuel_amt:,}')
+    if park_amt > 0:
+        lines.append(f'🅿️ 停車：−${park_amt:,}')
+    if fuel_amt > 0 or park_amt > 0:
+        lines.append(f'💎 淨薪：${total - fuel_amt - park_amt:,}')
     return '\n'.join(lines)
 
 

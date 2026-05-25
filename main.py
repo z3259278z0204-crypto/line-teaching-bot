@@ -21,6 +21,7 @@ from calendar_delete import list_upcoming, delete_event, find_and_delete
 from ai_chat import ask_ai
 from salary import monthly_summary, list_prices, monthly_chart
 from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance, oil_change_warning, delete_last_fuel
+from parking import save_parking, monthly_summary as parking_monthly_summary, monthly_total as parking_monthly_total, delete_last_parking
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -133,6 +134,34 @@ def process(user_id, text):
         if not desc:
             return '加油記錄是空的，沒有可刪除的資料。'
         return f'🗑️ 已刪除最後一筆加油：\n{desc}'
+
+    if text in ('本月停車', '停車記錄', '查停車', '本月停車費', '停車費'):
+        return parking_monthly_summary()
+
+    if text in ('刪除最後停車', '刪除停車', '刪除最後一筆停車'):
+        try:
+            desc = delete_last_parking()
+        except Exception as ex:
+            return f'⚠️ 刪除失敗：{ex}'
+        if not desc:
+            return '停車費記錄是空的，沒有可刪除的資料。'
+        return f'🗑️ 已刪除最後一筆停車費：\n{desc}'
+
+    if text.startswith('停車'):
+        rest = text[2:].strip()
+        if rest:
+            parts = rest.split(None, 1)
+            try:
+                amount = int(float(parts[0].replace('$', '').replace(',', '').replace('元', '')))
+            except ValueError:
+                return '⚠️ 停車費格式：停車 50 或 停車 50 仁愛親子館\n（第一個值要是金額）'
+            location = parts[1].strip() if len(parts) > 1 else ''
+            try:
+                save_parking(amount, location)
+            except Exception as ex:
+                return f'⚠️ 寫入失敗：{ex}'
+            loc_str = f'\n📍 {location}' if location else ''
+            return f'✅ 停車費記錄完成！\n\n💰 ${amount:,}{loc_str}'
 
     if text in ('同步', '同步薪資', '同步行事曆', 'sync'):
         from sync import sync_salary
