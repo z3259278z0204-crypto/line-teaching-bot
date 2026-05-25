@@ -26,6 +26,64 @@ def save_fuel(mileage, liters, amount, station='', notes=''):
     })
 
 
+def last_fill_performance(current_mileage, current_liters):
+    """這次加油的油耗表現。
+
+    回傳 (trip_km, km_per_l, avg_km_per_l, diff_pct) 或 None（首次加油無前次資料）。
+    km_per_l 用「上次→這次跨距 ÷ 這次加的油」（fill-to-full 標準算法）。
+    """
+    try:
+        cur_m = float(current_mileage)
+        cur_l = float(current_liters)
+    except (ValueError, TypeError):
+        return None
+    if cur_l <= 0:
+        return None
+
+    rows = read_all(FUEL_SHEET)
+    parsed = []
+    for r in rows:
+        d = _parse_date(r.get('日期'))
+        if not d:
+            continue
+        try:
+            m = float(str(r.get('里程', '0')).strip() or 0)
+            l = float(str(r.get('公升', '0')).strip() or 0)
+        except (ValueError, TypeError):
+            continue
+        parsed.append((d, m, l))
+    if not parsed:
+        return None
+    parsed.sort(key=lambda x: x[0])
+
+    # 這次加油假設是最新一筆（剛剛 append 進去）
+    # 找前一筆（里程小於這次的最後一筆）
+    prev = None
+    for d, m, l in parsed:
+        if m < cur_m:
+            prev = (d, m, l)
+    if not prev:
+        return None
+
+    trip_km = cur_m - prev[1]
+    if trip_km <= 0 or trip_km > 2000:
+        return None
+    km_per_l = trip_km / cur_l
+
+    # 個人平均：用所有已記錄的相鄰差（不含這次，因為這次還沒算進 parsed 末尾的「下一筆」）
+    total_km = 0.0
+    total_l = 0.0
+    for i in range(1, len(parsed)):
+        diff = parsed[i][1] - parsed[i - 1][1]
+        used_l = parsed[i][2]
+        if 0 < diff < 2000 and used_l > 0:
+            total_km += diff
+            total_l += used_l
+    avg = (total_km / total_l) if total_l > 0 else 0
+    diff_pct = ((km_per_l - avg) / avg * 100) if avg > 0 else 0
+    return trip_km, km_per_l, avg, diff_pct
+
+
 def monthly_total(year=None, month=None):
     """回傳 (本月總金額, 本月總公升, 加油次數)"""
     now = datetime.now(TAIWAN_TZ)

@@ -20,7 +20,7 @@ from calendar_add import add_event
 from calendar_delete import list_upcoming, delete_event, find_and_delete
 from ai_chat import ask_ai
 from salary import monthly_summary, list_prices, monthly_chart
-from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total
+from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -274,11 +274,43 @@ def process(user_id, text):
             return f'⚠️ 寫入失敗：{ex}'
         db.clear_state(user_id)
         station_str = f'\n⛽ {station}' if station else ''
+
+        perf_str = ''
+        try:
+            perf = last_fill_performance(data['mileage'], data['liters'])
+        except Exception:
+            perf = None
+        if perf:
+            trip_km, km_per_l, avg, diff_pct = perf
+            if avg > 0:
+                if diff_pct >= 5:
+                    judge = f'🟢 比平均高 {diff_pct:.1f}%'
+                elif diff_pct <= -5:
+                    judge = f'🔴 比平均低 {abs(diff_pct):.1f}%'
+                else:
+                    judge = f'⚪ 接近平均（{diff_pct:+.1f}%）'
+                perf_str = (
+                    f'\n\n━━━━━━━━━━\n'
+                    f'📊 這次油耗表現\n'
+                    f'🛣 跨距：{int(trip_km):,} km\n'
+                    f'⛽ 油耗：{km_per_l:.1f} km/L\n'
+                    f'📈 平均：{avg:.1f} km/L\n'
+                    f'{judge}'
+                )
+            else:
+                perf_str = (
+                    f'\n\n━━━━━━━━━━\n'
+                    f'📊 這次油耗\n'
+                    f'🛣 跨距：{int(trip_km):,} km\n'
+                    f'⛽ 油耗：{km_per_l:.1f} km/L'
+                )
+
         return (
             f'✅ 加油記錄完成！\n\n'
             f'📏 里程：{data["mileage"]:,} km\n'
             f'🛢 油量：{data["liters"]} L\n'
-            f'💰 金額：${data["amount"]:,}{station_str}\n\n'
+            f'💰 金額：${data["amount"]:,}{station_str}'
+            f'{perf_str}\n\n'
             '說「本月加油」可看月度摘要'
         )
 
