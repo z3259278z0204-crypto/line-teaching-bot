@@ -20,7 +20,7 @@ from calendar_add import add_event
 from calendar_delete import list_upcoming, delete_event, find_and_delete
 from ai_chat import ask_ai
 from salary import monthly_summary, list_prices, monthly_chart
-from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance, oil_change_warning
+from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance, oil_change_warning, delete_last_fuel
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -124,6 +124,15 @@ def process(user_id, text):
 
     if text in ('本月加油', '加油記錄', '查加油', '看加油'):
         return fuel_monthly_summary()
+
+    if text in ('刪除最後加油', '刪除加油', '刪除最後一筆加油'):
+        try:
+            desc = delete_last_fuel()
+        except Exception as ex:
+            return f'⚠️ 刪除失敗：{ex}'
+        if not desc:
+            return '加油記錄是空的，沒有可刪除的資料。'
+        return f'🗑️ 已刪除最後一筆加油：\n{desc}'
 
     if text in ('同步', '同步薪資', '同步行事曆', 'sync'):
         from sync import sync_salary

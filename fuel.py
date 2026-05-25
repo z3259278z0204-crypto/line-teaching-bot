@@ -1,5 +1,5 @@
 from datetime import datetime, timezone, timedelta
-from sheets_helper import read_all, append_row
+from sheets_helper import read_all, append_row, delete_rows_by_indices
 
 TAIWAN_TZ = timezone(timedelta(hours=8))
 FUEL_SHEET = '加油'
@@ -67,6 +67,43 @@ def oil_change_warning(current_mileage):
         return f'⚠️ 機油該換了！距離上次換機油已 {int(diff):,} km（建議 {OIL_CHANGE_INTERVAL_KM:,} km，超過 {int(over):,} km）'
     remain = OIL_CHANGE_INTERVAL_KM - int(diff)
     return f'🔔 機油提醒：距離上次換機油 {int(diff):,} km，再 {remain:,} km 就到 {OIL_CHANGE_INTERVAL_KM:,} km 週期'
+
+
+def delete_last_fuel():
+    """刪除「加油」分頁最後一列（最新日期 + Sheet 最末位）。
+
+    回傳描述字串如「2026/05/25 210,000km 30.0L $1,000 @Costco」，
+    沒有資料時回傳 None。
+    """
+    rows = read_all(FUEL_SHEET)
+    if not rows:
+        return None
+    last = rows[-1]
+    # Sheet 第一列是標頭，rows 索引 0 對應第 2 列
+    row_index = len(rows) + 1
+    delete_rows_by_indices(FUEL_SHEET, [row_index])
+
+    parts = []
+    parts.append((last.get('日期') or '').strip())
+    try:
+        m = int(float(str(last.get('里程', '0')).strip() or 0))
+        parts.append(f'{m:,}km')
+    except (ValueError, TypeError):
+        pass
+    try:
+        l = float(str(last.get('公升', '0')).strip() or 0)
+        parts.append(f'{l}L')
+    except (ValueError, TypeError):
+        pass
+    try:
+        a = int(float(str(last.get('金額', '0')).strip() or 0))
+        parts.append(f'${a:,}')
+    except (ValueError, TypeError):
+        pass
+    station = (last.get('加油站') or '').strip()
+    if station:
+        parts.append(f'@{station}')
+    return ' '.join([p for p in parts if p])
 
 
 def last_fill_performance(current_mileage, current_liters):
