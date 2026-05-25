@@ -7,7 +7,7 @@ import os
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone, timedelta
-from sheets_helper import read_all, append_row, delete_row_by_dict, find_price
+from sheets_helper import read_all, append_row, delete_row_by_dict
 
 TAIWAN_TZ = timezone(timedelta(hours=8))
 CALENDAR_IDS = [
@@ -69,12 +69,40 @@ def _event_key(e):
     return t.strftime('%Y/%m/%d'), t.strftime('%H:%M'), title
 
 
+def _load_price_table():
+    """讀一次價目表，回傳 [(關鍵字, 單價), ...]"""
+    rows = read_all('價目表')
+    out = []
+    for r in rows:
+        kw = (r.get('關鍵字') or '').strip()
+        if not kw:
+            continue
+        try:
+            price = int(str(r.get('單價', '')).strip())
+        except (ValueError, TypeError):
+            continue
+        out.append((kw, price))
+    return out
+
+
+def _match_price(title, price_table):
+    for kw, price in price_table:
+        if kw in title:
+            return price, kw
+    return None, None
+
+
 def sync_salary():
     """執行雙向同步，回傳人類可讀的訊息。"""
     try:
         events = _fetch_events()
     except Exception as ex:
         return f'⚠️ 取得行事曆失敗：{ex}'
+
+    try:
+        price_table = _load_price_table()
+    except Exception as ex:
+        return f'⚠️ 讀取價目表失敗：{ex}'
 
     # 篩出有匹配價目表的 events
     matched_events = []  # [(date_str, time_str, title, price, keyword)]
@@ -84,7 +112,7 @@ def sync_salary():
         if not key:
             continue
         d, t, title = key
-        price, keyword = find_price(title)
+        price, keyword = _match_price(title, price_table)
         if price is None:
             skipped_no_price += 1
             continue
