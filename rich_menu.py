@@ -8,15 +8,18 @@ LINE_DATA_API = 'https://api-data.line.me/v2/bot'
 IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'richmenu.png')
 
 WIDTH, HEIGHT = 2500, 1686
-COL_W, ROW_H = WIDTH // 3, HEIGHT // 2
+COLS, ROWS = 4, 2
+COL_W, ROW_H = WIDTH // COLS, HEIGHT // ROWS
 
 # 對應 generate_richmenu_image.py 的 CELLS 順序
 ACTIONS = [
     '今天行程',
-    '新增行程 ',   # 後面留空格提示使用者繼續輸入
+    '新增行程 ',
+    '記錄加油',
     '本月薪資',
     '薪資圖表',
     '記錄器材',
+    '本月加油',
     '說明',
 ]
 
@@ -30,11 +33,11 @@ def _headers():
 def _build_areas():
     areas = []
     for i, text in enumerate(ACTIONS):
-        col, row = i % 3, i // 3
+        col, row = i % COLS, i // COLS
         x = col * COL_W
         y = row * ROW_H
-        w = (WIDTH - x) if col == 2 else COL_W
-        h = (HEIGHT - y) if row == 1 else ROW_H
+        w = (WIDTH - x) if col == COLS - 1 else COL_W
+        h = (HEIGHT - y) if row == ROWS - 1 else ROW_H
         areas.append({
             'bounds': {'x': x, 'y': y, 'width': w, 'height': h},
             'action': {'type': 'message', 'text': text},
@@ -46,7 +49,7 @@ def _create_menu():
     body = json.dumps({
         'size': {'width': WIDTH, 'height': HEIGHT},
         'selected': True,
-        'name': 'main_menu_v1',
+        'name': 'main_menu_v2',
         'chatBarText': '選單',
         'areas': _build_areas(),
     }).encode()

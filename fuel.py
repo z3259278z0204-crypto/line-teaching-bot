@@ -1,0 +1,102 @@
+from datetime import datetime, timezone, timedelta
+from sheets_helper import read_all, append_row
+
+TAIWAN_TZ = timezone(timedelta(hours=8))
+FUEL_SHEET = '加油'
+
+
+def _parse_date(s):
+    s = (s or '').strip()
+    for fmt in ('%Y/%m/%d', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def save_fuel(mileage, liters, amount, station='', notes=''):
+    append_row(FUEL_SHEET, {
+        '日期': datetime.now(TAIWAN_TZ).strftime('%Y/%m/%d'),
+        '里程': mileage,
+        '公升': liters,
+        '金額': amount,
+        '加油站': station,
+        '備註': notes,
+    })
+
+
+def monthly_total(year=None, month=None):
+    """回傳 (本月總金額, 本月總公升, 加油次數)"""
+    now = datetime.now(TAIWAN_TZ)
+    year = year or now.year
+    month = month or now.month
+    rows = read_all(FUEL_SHEET)
+    total_amt = 0
+    total_l = 0.0
+    count = 0
+    for row in rows:
+        d = _parse_date(row.get('日期'))
+        if not d or d.year != year or d.month != month:
+            continue
+        try:
+            total_amt += int(float(str(row.get('金額', '0')).strip() or 0))
+            total_l += float(str(row.get('公升', '0')).strip() or 0)
+            count += 1
+        except (ValueError, TypeError):
+            continue
+    return total_amt, total_l, count
+
+
+def monthly_summary(year=None, month=None):
+    """本月加油摘要 + 油耗。"""
+    now = datetime.now(TAIWAN_TZ)
+    year = year or now.year
+    month = month or now.month
+
+    all_rows = read_all(FUEL_SHEET)
+    # 按日期排序所有資料以正確計算里程差
+    parsed = []
+    for r in all_rows:
+        d = _parse_date(r.get('日期'))
+        if not d:
+            continue
+        try:
+            m = float(str(r.get('里程', '0')).strip() or 0)
+            l = float(str(r.get('公升', '0')).strip() or 0)
+            a = int(float(str(r.get('金額', '0')).strip() or 0))
+        except (ValueError, TypeError):
+            continue
+        parsed.append((d, m, l, a, r.get('加油站', '')))
+    parsed.sort(key=lambda x: x[0])
+
+    month_records = [(d, m, l, a, s) for d, m, l, a, s in parsed
+                     if d.year == year and d.month == month]
+    if not month_records:
+        return f'⛽ {year}/{month:02d} 還沒有加油記錄'
+
+    lines = [f'⛽ {year}/{month:02d} 加油摘要', '']
+    total_amt = 0
+    total_l = 0.0
+    for i, (d, m, l, a, s) in enumerate(month_records):
+        idx_all = parsed.index((d, m, l, a, s))
+        consumption = ''
+        if idx_all > 0:
+            prev = parsed[idx_all - 1]
+            diff = m - prev[1]
+            if l > 0 and 0 < diff < 2000:
+                consumption = f'  ({diff/l:.1f} km/L)'
+        station_str = f' @{s}' if s else ''
+        lines.append(f'{d.strftime("%m/%d")} {int(m):,}km {l:.1f}L ${a:,}{station_str}{consumption}')
+        total_amt += a
+        total_l += l
+    lines.append('')
+    lines.append('━━━━━━━━━━')
+    lines.append(f'⛽ 共 {len(month_records)} 次｜{total_l:.1f}L｜${total_amt:,}')
+    if len(month_records) >= 2:
+        first_m = month_records[0][1]
+        last_m = month_records[-1][1]
+        avg_consumption = (last_m - first_m) / total_l if total_l > 0 else 0
+        if 0 < avg_consumption < 100:
+            lines.append(f'📏 平均油耗：{avg_consumption:.1f} km/L')
+    return '\n'.join(lines)

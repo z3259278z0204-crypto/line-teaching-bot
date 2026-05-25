@@ -20,6 +20,7 @@ from calendar_add import add_event
 from calendar_delete import list_upcoming, delete_event, find_and_delete
 from ai_chat import ask_ai
 from salary import monthly_summary, list_prices, monthly_chart
+from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -78,8 +79,12 @@ def process(user_id, text):
             '🔸 刪除行程 → 列出可刪行程\n'
             '🔸 刪除行程 5/27 16:15 輔大自主課（直接刪）\n\n'
             '💰 薪資\n'
-            '🔸 本月薪資 / 上月薪資\n'
+            '🔸 本月薪資 / 上月薪資（含淨薪）\n'
+            '🔸 薪資圖表 → 視覺化\n'
             '🔸 價目表 → 查目前價格設定\n\n'
+            '⛽ 加油\n'
+            '🔸 記錄加油 → 開始新增\n'
+            '🔸 本月加油 → 月度摘要 + 油耗\n\n'
             '🧰 器材記錄\n'
             '🔸 記錄器材 → 開始新增\n'
             '🔸 查看記錄 → 最近5筆\n'
@@ -103,6 +108,13 @@ def process(user_id, text):
 
     if text in ('薪資圖表', '圖表', '本月圖表', '薪資視覺化', '視覺化'):
         return monthly_chart()
+
+    if text in ('本月加油', '加油記錄', '查加油', '看加油'):
+        return fuel_monthly_summary()
+
+    if text in ('記錄加油', '紀錄加油', '加油', '新增加油'):
+        db.set_state(user_id, 'waiting_fuel_mileage', None, None)
+        return '⛽ 開始記錄加油\n\n1️⃣ 目前里程？（例如：56000）'
 
     if text in ('今天行程', '今天', '查行程', '行程', '今日行程'):
         return query_schedule(0)
@@ -163,6 +175,8 @@ def process(user_id, text):
             return monthly_summary(prev.year, prev.month)
         if keyword in ('價目表', '價格'):
             return list_prices()
+        if keyword in ('加油', '本月加油', '油費'):
+            return fuel_monthly_summary()
         return search_records(user_id, keyword)
 
     if text in ('刪除最後一筆', '刪除'):
@@ -205,6 +219,52 @@ def process(user_id, text):
         db.clear_state(user_id)
         return '已取消刪除。'
 
+    if state == 'waiting_fuel_mileage':
+        try:
+            mileage = int(float(text.replace(',', '').replace('km', '').strip()))
+        except ValueError:
+            return '⚠️ 里程要是數字，例如：56000\n（或說「取消」中止）'
+        db.set_state(user_id, 'waiting_fuel_liters', _json.dumps({'mileage': mileage}), None)
+        return f'✅ 里程：{mileage:,} km\n\n2️⃣ 加了幾公升？（例如：38）'
+
+    if state == 'waiting_fuel_liters':
+        try:
+            liters = float(text.replace('L', '').replace('l', '').strip())
+        except ValueError:
+            return '⚠️ 公升要是數字，例如：38\n（或說「取消」中止）'
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        data['liters'] = liters
+        db.set_state(user_id, 'waiting_fuel_amount', _json.dumps(data), None)
+        return f'✅ 油量：{liters} L\n\n3️⃣ 總金額？（例如：1800）'
+
+    if state == 'waiting_fuel_amount':
+        try:
+            amount = int(float(text.replace('$', '').replace(',', '').replace('元', '').strip()))
+        except ValueError:
+            return '⚠️ 金額要是數字，例如：1800\n（或說「取消」中止）'
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        data['amount'] = amount
+        db.set_state(user_id, 'waiting_fuel_station', _json.dumps(data), None)
+        return f'✅ 金額：${amount:,}\n\n4️⃣ 加油站？（直接說「無」可跳過）'
+
+    if state == 'waiting_fuel_station':
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        station = '' if text in ('無', '跳過', '無') else text
+        try:
+            save_fuel(data['mileage'], data['liters'], data['amount'], station)
+        except Exception as ex:
+            db.clear_state(user_id)
+            return f'⚠️ 寫入失敗：{ex}'
+        db.clear_state(user_id)
+        station_str = f'\n⛽ {station}' if station else ''
+        return (
+            f'✅ 加油記錄完成！\n\n'
+            f'📏 里程：{data["mileage"]:,} km\n'
+            f'🛢 油量：{data["liters"]} L\n'
+            f'💰 金額：${data["amount"]:,}{station_str}\n\n'
+            '說「本月加油」可看月度摘要'
+        )
+
     if state == 'waiting_week':
         db.set_state(user_id, 'waiting_tools', text, None)
         return f'✅ 日期：{text}\n\n🧰 這週用了哪些教具？\n（多個教具用頓號分隔，例如：呼拉圈、跳繩、平衡板）'
@@ -229,12 +289,12 @@ def process(user_id, text):
         )
 
     # 像在做動作但格式不對的明顯指令，給格式提示，不要丟給 AI 演戲
-    if text.startswith(('新增', '加', '建立', '幫我加', '幫我新增')):
-        return ('⚠️ 指令格式不完整，無法新增。\n\n'
-                '✅ 新增行程範例：\n'
-                '新增行程 5/27 16:15 輔大自主課\n\n'
-                '✅ 新增器材記錄：\n'
-                '記錄器材')
+    if (text.startswith(('新增', '加', '建立', '幫我加', '幫我新增'))
+            and not text.startswith('加油')):
+        return ('⚠️ 指令格式不完整。\n\n'
+                '✅ 新增行程：\n新增行程 5/27 16:15 輔大自主課\n\n'
+                '✅ 記錄器材：記錄器材\n'
+                '✅ 記錄加油：記錄加油')
 
     # 任何不認識的訊息交給 AI
     return ask_ai(text)
