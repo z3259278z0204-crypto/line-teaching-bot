@@ -40,6 +40,12 @@ def setup_richmenu():
     return setup(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
 
 
+@app.route('/sync')
+def sync_endpoint():
+    from sync import sync_salary
+    return sync_salary(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
 @app.route('/webhook', methods=['POST'])
 def callback():
     signature = request.headers.get('X-Line-Signature', '')
@@ -111,6 +117,10 @@ def process(user_id, text):
 
     if text in ('本月加油', '加油記錄', '查加油', '看加油'):
         return fuel_monthly_summary()
+
+    if text in ('同步', '同步薪資', '同步行事曆', 'sync'):
+        from sync import sync_salary
+        return sync_salary()
 
     if text in ('記錄加油', '紀錄加油', '加油', '新增加油'):
         db.set_state(user_id, 'waiting_fuel_mileage', None, None)
