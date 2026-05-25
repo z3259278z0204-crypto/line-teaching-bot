@@ -42,8 +42,15 @@ def setup_richmenu():
 
 @app.route('/sync')
 def sync_endpoint():
-    from sync import sync_salary
-    return sync_salary(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+    import traceback
+    try:
+        from sync import sync_salary
+        return sync_salary(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+    except Exception as e:
+        return (
+            f'❌ 同步失敗\n{type(e).__name__}: {e}\n\n{traceback.format_exc()[:2000]}',
+            200, {'Content-Type': 'text/plain; charset=utf-8'}
+        )
 
 
 @app.route('/webhook', methods=['POST'])
