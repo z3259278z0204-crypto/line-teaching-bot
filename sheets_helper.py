@@ -67,6 +67,40 @@ def append_row(sheet_name, row_dict):
     return _request(url, method='POST', body={'values': [row]})
 
 
+def append_rows(sheet_name, list_of_dicts):
+    """批次追加多筆。一次 API 完成所有列。"""
+    if not list_of_dicts:
+        return None
+    sid = _spreadsheet_id()
+    headers = _read_headers(sheet_name)
+    values = [[str(d.get(h, '')) for h in headers] for d in list_of_dicts]
+    rng = urllib.parse.quote(sheet_name)
+    url = f'{SHEETS_BASE}/{sid}/values/{rng}:append?valueInputOption=USER_ENTERED'
+    return _request(url, method='POST', body={'values': values})
+
+
+def delete_rows_by_indices(sheet_name, row_indices):
+    """一次刪除多列（傳入的是 1-based row 編號清單，含標頭那列為第 1 列）。
+    傳入時不需排序，內部會從大到小排避免索引偏移。"""
+    if not row_indices:
+        return 0
+    sid = _spreadsheet_id()
+    sheet_id = _get_sheet_id(sheet_name)
+    sorted_rows = sorted(set(row_indices), reverse=True)
+    requests = [{
+        'deleteDimension': {
+            'range': {
+                'sheetId': sheet_id,
+                'dimension': 'ROWS',
+                'startIndex': r - 1,
+                'endIndex': r,
+            }
+        }
+    } for r in sorted_rows]
+    _request(f'{SHEETS_BASE}/{sid}:batchUpdate', method='POST', body={'requests': requests})
+    return len(sorted_rows)
+
+
 def find_price(title):
     """依價目表「關鍵字」做包含比對，回傳 (單價, 匹配的關鍵字) 或 (None, None)"""
     rows = read_all('價目表')

@@ -7,7 +7,7 @@ import os
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone, timedelta
-from sheets_helper import read_all, append_row, delete_row_by_dict
+from sheets_helper import read_all, append_rows, delete_rows_by_indices
 
 TAIWAN_TZ = timezone(timedelta(hours=8))
 CALENDAR_IDS = [
@@ -118,55 +118,55 @@ def sync_salary():
             continue
         matched_events.append((d, t, title, price, keyword))
 
-    # 讀取現有薪資
+    # 讀取現有薪資（記住每筆對應的 Sheet 列號，從 2 開始：1 是標頭）
     salary_rows = read_all(SALARY_SHEET)
     existing_keys = set()
-    for r in salary_rows:
+    key_to_row_idx = {}
+    for i, r in enumerate(salary_rows, start=2):
         d = (r.get('日期') or '').strip()
         t = (r.get('時間') or '').strip()
         title = (r.get('標題') or '').strip()
         if d and t and title:
             existing_keys.add((d, t, title))
+            key_to_row_idx[(d, t, title)] = i
 
     event_keys = {(d, t, title) for d, t, title, _, _ in matched_events}
 
-    # 補：Calendar 有，Sheet 沒有
-    added = 0
+    # 補：批次寫入 Calendar 有但 Sheet 沒有的
+    to_add = []
     for d, t, title, price, keyword in matched_events:
         if (d, t, title) not in existing_keys:
-            try:
-                append_row(SALARY_SHEET, {
-                    '日期': d, '時間': t, '標題': title, '單價': price,
-                    '備註': f'匹配關鍵字：{keyword}（自動同步）',
-                })
-                added += 1
-            except Exception:
-                pass
+            to_add.append({
+                '日期': d, '時間': t, '標題': title, '單價': price,
+                '備註': f'匹配關鍵字：{keyword}（自動同步）',
+            })
+    added = 0
+    if to_add:
+        try:
+            append_rows(SALARY_SHEET, to_add)
+            added = len(to_add)
+        except Exception:
+            pass
 
-    # 移：Sheet 有，Calendar 沒有（限同步範圍內的日期才刪，避免誤刪歷史資料）
+    # 移：批次刪 Sheet 有但 Calendar 沒有的（只在同步範圍內）
     now = datetime.now(TAIWAN_TZ)
     cutoff_past = now - timedelta(days=PAST_DAYS)
-    removed = 0
-    for r in salary_rows:
-        d_str = (r.get('日期') or '').strip()
-        t_str = (r.get('時間') or '').strip()
-        title = (r.get('標題') or '').strip()
-        if not (d_str and t_str and title):
-            continue
+    to_delete_indices = []
+    for (d_str, t_str, title), row_idx in key_to_row_idx.items():
         try:
             d_obj = datetime.strptime(d_str, '%Y/%m/%d').replace(tzinfo=TAIWAN_TZ)
         except ValueError:
             continue
         if d_obj < cutoff_past:
-            continue  # 超出同步範圍，不動
+            continue
         if (d_str, t_str, title) not in event_keys:
-            try:
-                if delete_row_by_dict(SALARY_SHEET, {
-                    '日期': d_str, '時間': t_str, '標題': title,
-                }):
-                    removed += 1
-            except Exception:
-                pass
+            to_delete_indices.append(row_idx)
+    removed = 0
+    if to_delete_indices:
+        try:
+            removed = delete_rows_by_indices(SALARY_SHEET, to_delete_indices)
+        except Exception:
+            pass
 
     return (
         f'🔄 同步完成\n\n'
