@@ -9,7 +9,7 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi,
-    ReplyMessageRequest, TextMessage
+    ReplyMessageRequest, TextMessage, ImageMessage
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from database import Database
@@ -70,11 +70,23 @@ def handle_message(event):
     user_id = event.source.user_id
     text = event.message.text.strip()
     reply = process(user_id, text)
+
+    if isinstance(reply, dict) and reply.get('type') == 'image':
+        messages = []
+        if reply.get('text'):
+            messages.append(TextMessage(text=reply['text']))
+        messages.append(ImageMessage(
+            originalContentUrl=reply['image_url'],
+            previewImageUrl=reply['image_url'],
+        ))
+    else:
+        messages = [TextMessage(text=reply)]
+
     with ApiClient(configuration) as client:
         MessagingApi(client).reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply)]
+                messages=messages,
             )
         )
 
@@ -121,7 +133,22 @@ def process(user_id, text):
         return list_prices()
 
     if text in ('薪資圖表', '圖表', '本月圖表', '薪資視覺化', '視覺化'):
-        return monthly_chart()
+        try:
+            from chart import generate_salary_chart_png
+            token = uuid.uuid4().hex[:10]
+            filepath = f'/tmp/chart_{token}.png'
+            ok = generate_salary_chart_png(filepath)
+            if not ok:
+                return monthly_chart()
+            db.save_token(token, filepath)
+            url = f'{BASE_URL}/image/{token}.png'
+            return {
+                'type': 'image',
+                'image_url': url,
+                'text': monthly_summary(),
+            }
+        except Exception as ex:
+            return f'⚠️ 圖表產生失敗：{ex}\n（已退回文字版）\n\n' + monthly_chart()
 
     if text in ('本月加油', '加油記錄', '查加油', '看加油'):
         return fuel_monthly_summary()
@@ -436,6 +463,18 @@ def show_recent(user_id):
         notes = r['notes'] if r['notes'] else '無'
         lines.append(f'📅 {r["week"]}\n🧰 {r["tools"]}\n📝 {notes}\n')
     return '\n'.join(lines)
+
+
+@app.route('/image/<token>.png')
+def image(token):
+    from datetime import datetime, timedelta, timezone
+    filepath, created_at = db.get_token(token)
+    if not filepath or not os.path.exists(filepath):
+        return '圖片已過期', 404
+    age = datetime.now(timezone.utc) - created_at
+    if age > timedelta(minutes=30):
+        return '圖片已過期', 410
+    return send_file(filepath, mimetype='image/png')
 
 
 @app.route('/download/<token>')
