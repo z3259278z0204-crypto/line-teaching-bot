@@ -20,7 +20,7 @@ from calendar_add import add_event
 from calendar_delete import list_upcoming, delete_event, find_and_delete
 from ai_chat import ask_ai
 from salary import monthly_summary, list_prices, monthly_chart
-from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance
+from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance, oil_change_warning
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -267,13 +267,22 @@ def process(user_id, text):
     if state == 'waiting_fuel_station':
         data = _json.loads(db.get_temp_week(user_id) or '{}')
         station = '' if text in ('無', '跳過', '無') else text
+        data['station'] = station
+        db.set_state(user_id, 'waiting_fuel_oil', _json.dumps(data), None)
+        return '✅ 加油站：' + (station if station else '（跳過）') + '\n\n5️⃣ 這次有換機油嗎？\n（說「有」或「無」）'
+
+    if state == 'waiting_fuel_oil':
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        oil_change = text in ('有', 'Y', 'y', '是', '換了', '換', 'yes', 'YES')
+        station = data.get('station', '')
         try:
-            save_fuel(data['mileage'], data['liters'], data['amount'], station)
+            save_fuel(data['mileage'], data['liters'], data['amount'], station, oil_change=oil_change)
         except Exception as ex:
             db.clear_state(user_id)
             return f'⚠️ 寫入失敗：{ex}'
         db.clear_state(user_id)
         station_str = f'\n⛽ {station}' if station else ''
+        oil_str = '\n🔧 已記錄：本次換機油' if oil_change else ''
 
         perf_str = ''
         try:
@@ -305,12 +314,20 @@ def process(user_id, text):
                     f'⛽ 油耗：{km_per_l:.1f} km/L'
                 )
 
+        oil_warn = ''
+        try:
+            warn = oil_change_warning(data['mileage'])
+        except Exception:
+            warn = None
+        if warn:
+            oil_warn = f'\n\n━━━━━━━━━━\n{warn}'
+
         return (
             f'✅ 加油記錄完成！\n\n'
             f'📏 里程：{data["mileage"]:,} km\n'
             f'🛢 油量：{data["liters"]} L\n'
-            f'💰 金額：${data["amount"]:,}{station_str}'
-            f'{perf_str}\n\n'
+            f'💰 金額：${data["amount"]:,}{station_str}{oil_str}'
+            f'{perf_str}{oil_warn}\n\n'
             '說「本月加油」可看月度摘要'
         )
 

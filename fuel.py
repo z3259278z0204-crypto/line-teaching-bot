@@ -4,6 +4,9 @@ from sheets_helper import read_all, append_row
 TAIWAN_TZ = timezone(timedelta(hours=8))
 FUEL_SHEET = '加油'
 
+OIL_CHANGE_INTERVAL_KM = 5000
+OIL_CHANGE_WARN_KM = 4500
+
 
 def _parse_date(s):
     s = (s or '').strip()
@@ -15,7 +18,7 @@ def _parse_date(s):
     return None
 
 
-def save_fuel(mileage, liters, amount, station='', notes=''):
+def save_fuel(mileage, liters, amount, station='', notes='', oil_change=False):
     append_row(FUEL_SHEET, {
         '日期': datetime.now(TAIWAN_TZ).strftime('%Y/%m/%d'),
         '里程': mileage,
@@ -23,7 +26,47 @@ def save_fuel(mileage, liters, amount, station='', notes=''):
         '金額': amount,
         '加油站': station,
         '備註': notes,
+        '保養': '機油' if oil_change else '',
     })
+
+
+def last_oil_change_mileage():
+    """找最近一筆「保養」欄位包含『機油』的紀錄，回傳其里程；找不到回傳 None。"""
+    rows = read_all(FUEL_SHEET)
+    parsed = []
+    for r in rows:
+        if '機油' not in (r.get('保養') or ''):
+            continue
+        d = _parse_date(r.get('日期'))
+        try:
+            m = float(str(r.get('里程', '0')).strip() or 0)
+        except (ValueError, TypeError):
+            continue
+        if d:
+            parsed.append((d, m))
+    if not parsed:
+        return None
+    parsed.sort(key=lambda x: x[0])
+    return parsed[-1][1]
+
+
+def oil_change_warning(current_mileage):
+    """檢查是否該換機油，回傳警告字串或 None。"""
+    try:
+        cur_m = float(current_mileage)
+    except (ValueError, TypeError):
+        return None
+    last_m = last_oil_change_mileage()
+    if last_m is None:
+        return None
+    diff = cur_m - last_m
+    if diff < OIL_CHANGE_WARN_KM:
+        return None
+    over = diff - OIL_CHANGE_INTERVAL_KM
+    if over >= 0:
+        return f'⚠️ 機油該換了！距離上次換機油已 {int(diff):,} km（建議 {OIL_CHANGE_INTERVAL_KM:,} km，超過 {int(over):,} km）'
+    remain = OIL_CHANGE_INTERVAL_KM - int(diff)
+    return f'🔔 機油提醒：距離上次換機油 {int(diff):,} km，再 {remain:,} km 就到 {OIL_CHANGE_INTERVAL_KM:,} km 週期'
 
 
 def last_fill_performance(current_mileage, current_liters):
