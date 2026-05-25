@@ -165,6 +165,16 @@ def process(user_id, text):
     if text in ('本月停車', '停車記錄', '查停車', '本月停車費', '停車費'):
         return parking_monthly_summary()
 
+    if text in ('記錄停車', '紀錄停車', '新增停車'):
+        return (
+            '🅿️ 記錄停車費用法：\n\n'
+            '🔸 停車 50\n'
+            '🔸 停車 50 仁愛親子館\n\n'
+            '其他指令：\n'
+            '🔸 本月停車 → 月度摘要\n'
+            '🔸 刪除最後停車 → 反悔'
+        )
+
     if text in ('刪除最後停車', '刪除停車', '刪除最後一筆停車'):
         try:
             desc = delete_last_parking()
