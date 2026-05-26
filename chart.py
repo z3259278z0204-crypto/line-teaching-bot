@@ -89,26 +89,20 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     colors = plt.cm.Set2(range(len(labels)))
 
     # === 上：圓餅圖 ===
-    fp = _FONT_PROP
     wedges, texts, autotexts = ax1.pie(
         values,
         labels=labels,
         colors=colors,
         autopct=lambda p: f'${int(p*total/100):,} ({p:.0f}%)',
         startangle=90,
-        textprops={'fontsize': 12, 'fontproperties': fp},
+        textprops={'fontsize': 12},
         wedgeprops={'edgecolor': 'white', 'linewidth': 2},
     )
     for t in autotexts:
         t.set_color('white')
         t.set_fontweight('bold')
         t.set_fontsize(11)
-        if fp:
-            t.set_fontproperties(fp)
-    for t in texts:
-        if fp:
-            t.set_fontproperties(fp)
-    ax1.set_title(f'{year}/{month:02d} 薪資分布', fontsize=18, fontweight='bold', pad=20, fontproperties=fp)
+    ax1.set_title(f'{year}/{month:02d} 薪資分布', fontsize=18, fontweight='bold', pad=20)
 
     # === 下：長條圖 ===
     bar_labels = labels.copy()
@@ -125,10 +119,10 @@ def generate_salary_chart_png(filepath, year=None, month=None):
 
     bars = ax2.barh(range(len(bar_labels)), bar_values, color=bar_colors, edgecolor='white', linewidth=1.5)
     ax2.set_yticks(range(len(bar_labels)))
-    ax2.set_yticklabels(bar_labels, fontsize=12, fontproperties=fp)
+    ax2.set_yticklabels(bar_labels, fontsize=12)
     ax2.invert_yaxis()
     ax2.axvline(x=0, color='gray', linewidth=0.8)
-    ax2.set_title(f'{year}/{month:02d} 收支明細', fontsize=18, fontweight='bold', pad=15, fontproperties=fp)
+    ax2.set_title(f'{year}/{month:02d} 收支明細', fontsize=18, fontweight='bold', pad=15)
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
     ax2.grid(axis='x', linestyle='--', alpha=0.3)
@@ -145,11 +139,11 @@ def generate_salary_chart_png(filepath, year=None, month=None):
             ha = 'right'
             color = 'white'
         ax2.text(x, bar.get_y() + bar.get_height()/2, f'${abs(int(val)):,}',
-                 va='center', ha=ha, fontsize=11, fontweight='bold', fontproperties=fp, color=color)
+                 va='center', ha=ha, fontsize=11, fontweight='bold', color=color)
     ax2.set_xlim(-max_abs * 1.15, max_abs * 1.15)
 
     summary = f'毛薪 ${total:,}  |  油費 -${fuel_amt:,}  |  停車 -${park_amt:,}  |  淨薪 ${net:,}'
-    fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333', fontproperties=fp)
+    fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333')
 
     plt.subplots_adjust(left=0.15, right=0.95, top=0.93, bottom=0.08, hspace=0.35)
     plt.savefig(filepath, dpi=120, facecolor=fig.get_facecolor())

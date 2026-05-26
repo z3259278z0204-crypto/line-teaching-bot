@@ -149,8 +149,9 @@ def process(user_id, text):
             }
         except Exception as ex:
             import traceback
-            tb_last = traceback.format_exc().strip().split('\n')[-3:]
-            return f'⚠️ 圖表產生失敗 [v5]：{type(ex).__name__}: {ex}\n位置：{tb_last[-2] if len(tb_last)>1 else "?"}\n（已退回文字版）\n\n' + monthly_chart()
+            tb_lines = traceback.format_exc().strip().split('\n')
+            tb_show = '\n'.join(tb_lines[-8:])
+            return f'⚠️ 圖表產生失敗 [v6]：{type(ex).__name__}\n\n{tb_show}\n\n（已退回文字版）\n\n' + monthly_chart()
 
     if text in ('本月加油', '加油記錄', '查加油', '看加油'):
         return fuel_monthly_summary()
