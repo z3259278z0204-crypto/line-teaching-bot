@@ -148,7 +148,9 @@ def process(user_id, text):
                 'text': monthly_summary(),
             }
         except Exception as ex:
-            return f'⚠️ 圖表產生失敗：{ex}\n（已退回文字版）\n\n' + monthly_chart()
+            import traceback
+            tb_last = traceback.format_exc().strip().split('\n')[-3:]
+            return f'⚠️ 圖表產生失敗 [v5]：{type(ex).__name__}: {ex}\n位置：{tb_last[-2] if len(tb_last)>1 else "?"}\n（已退回文字版）\n\n' + monthly_chart()
 
     if text in ('本月加油', '加油記錄', '查加油', '看加油'):
         return fuel_monthly_summary()
