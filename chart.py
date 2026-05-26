@@ -83,26 +83,37 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     labels = [t for t, _ in sorted_items]
     values = [v for _, v in sorted_items]
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 11))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
     fig.patch.set_facecolor('#FAFAFA')
 
-    colors = plt.cm.Set2(range(len(labels)))
+    cmap = matplotlib.colormaps['tab20']
+    colors = [cmap(i % 20) for i in range(len(labels))]
 
     # === 上：圓餅圖 ===
+    SMALL_PCT = 5.0
+    pie_labels = [lab if (v / total * 100) >= SMALL_PCT else '' for lab, v in zip(labels, values)]
+    def _autopct(p):
+        return f'{p:.0f}%' if p >= SMALL_PCT else ''
+
     wedges, texts, autotexts = ax1.pie(
         values,
-        labels=labels,
+        labels=pie_labels,
         colors=colors,
-        autopct=lambda p: f'${int(p*total/100):,} ({p:.0f}%)',
+        autopct=_autopct,
         startangle=90,
-        textprops={'fontsize': 12},
+        textprops={'fontsize': 11},
         wedgeprops={'edgecolor': 'white', 'linewidth': 2},
+        pctdistance=0.75,
     )
     for t in autotexts:
         t.set_color('white')
         t.set_fontweight('bold')
         t.set_fontsize(11)
     ax1.set_title(f'{year}/{month:02d} 薪資分布', fontsize=18, fontweight='bold', pad=20)
+
+    legend_labels = [f'{lab}  ${val:,}' for lab, val in zip(labels, values)]
+    ax1.legend(wedges, legend_labels, loc='center left', bbox_to_anchor=(1.0, 0.5),
+               fontsize=9, frameon=False)
 
     # === 下：長條圖 ===
     bar_labels = labels.copy()
@@ -119,7 +130,7 @@ def generate_salary_chart_png(filepath, year=None, month=None):
 
     bars = ax2.barh(range(len(bar_labels)), bar_values, color=bar_colors, edgecolor='white', linewidth=1.5)
     ax2.set_yticks(range(len(bar_labels)))
-    ax2.set_yticklabels(bar_labels, fontsize=12)
+    ax2.set_yticklabels(bar_labels, fontsize=10)
     ax2.invert_yaxis()
     ax2.axvline(x=0, color='gray', linewidth=0.8)
     ax2.set_title(f'{year}/{month:02d} 收支明細', fontsize=18, fontweight='bold', pad=15)
@@ -145,7 +156,7 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     summary = f'毛薪 ${total:,}  |  油費 -${fuel_amt:,}  |  停車 -${park_amt:,}  |  淨薪 ${net:,}'
     fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333')
 
-    plt.subplots_adjust(left=0.15, right=0.95, top=0.93, bottom=0.08, hspace=0.35)
+    plt.subplots_adjust(left=0.22, right=0.78, top=0.94, bottom=0.06, hspace=0.30)
     plt.savefig(filepath, dpi=120, facecolor=fig.get_facecolor())
     plt.close(fig)
     return True
