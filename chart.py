@@ -105,11 +105,11 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     bar_values = values.copy()
     bar_colors = list(colors)
     if fuel_amt > 0:
-        bar_labels.append('⛽ 油費')
+        bar_labels.append('油費')
         bar_values.append(-fuel_amt)
         bar_colors.append('#E57373')
     if park_amt > 0:
-        bar_labels.append('🅿️ 停車')
+        bar_labels.append('停車')
         bar_values.append(-park_amt)
         bar_colors.append('#FFB74D')
 
