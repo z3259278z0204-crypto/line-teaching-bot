@@ -27,6 +27,7 @@ def _font():
         _FONT_PROP = font_manager.FontProperties(fname=FONT_PATH)
         plt.rcParams['font.family'] = _FONT_PROP.get_name()
         plt.rcParams['axes.unicode_minus'] = False
+        plt.rcParams['text.parse_math'] = False
     return _FONT_PROP
 
 
@@ -132,12 +133,20 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     ax2.spines['right'].set_visible(False)
     ax2.grid(axis='x', linestyle='--', alpha=0.3)
 
+    max_abs = max(map(abs, bar_values))
     for bar, val in zip(bars, bar_values):
         width = bar.get_width()
-        x = width + (max(map(abs, bar_values)) * 0.01) if width >= 0 else width - (max(map(abs, bar_values)) * 0.01)
-        ha = 'left' if width >= 0 else 'right'
+        if width >= 0:
+            x = width + max_abs * 0.01
+            ha = 'left'
+            color = '#333'
+        else:
+            x = -max_abs * 0.01
+            ha = 'right'
+            color = 'white'
         ax2.text(x, bar.get_y() + bar.get_height()/2, f'${abs(int(val)):,}',
-                 va='center', ha=ha, fontsize=11, fontweight='bold', fontproperties=fp)
+                 va='center', ha=ha, fontsize=11, fontweight='bold', fontproperties=fp, color=color)
+    ax2.set_xlim(-max_abs * 1.15, max_abs * 1.15)
 
     summary = f'毛薪 ${total:,}  |  油費 -${fuel_amt:,}  |  停車 -${park_amt:,}  |  淨薪 ${net:,}'
     fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333', fontproperties=fp)
