@@ -1,4 +1,5 @@
 import os
+import sys
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 
@@ -6,6 +7,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
+
+sys.setrecursionlimit(5000)
 
 from sheets_helper import read_all
 from fuel import monthly_total as fuel_monthly_total
@@ -85,20 +88,26 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     colors = plt.cm.Set2(range(len(labels)))
 
     # === 上：圓餅圖 ===
+    fp = _FONT_PROP
     wedges, texts, autotexts = ax1.pie(
         values,
         labels=labels,
         colors=colors,
-        autopct=lambda p: f'${int(p*total/100):,}\n({p:.0f}%)',
+        autopct=lambda p: f'${int(p*total/100):,} ({p:.0f}%)',
         startangle=90,
-        textprops={'fontsize': 12},
+        textprops={'fontsize': 12, 'fontproperties': fp},
         wedgeprops={'edgecolor': 'white', 'linewidth': 2},
     )
     for t in autotexts:
         t.set_color('white')
         t.set_fontweight('bold')
         t.set_fontsize(11)
-    ax1.set_title(f'{year}/{month:02d} 薪資分布', fontsize=18, fontweight='bold', pad=20)
+        if fp:
+            t.set_fontproperties(fp)
+    for t in texts:
+        if fp:
+            t.set_fontproperties(fp)
+    ax1.set_title(f'{year}/{month:02d} 薪資分布', fontsize=18, fontweight='bold', pad=20, fontproperties=fp)
 
     # === 下：長條圖 ===
     bar_labels = labels.copy()
@@ -115,27 +124,25 @@ def generate_salary_chart_png(filepath, year=None, month=None):
 
     bars = ax2.barh(range(len(bar_labels)), bar_values, color=bar_colors, edgecolor='white', linewidth=1.5)
     ax2.set_yticks(range(len(bar_labels)))
-    ax2.set_yticklabels(bar_labels, fontsize=12)
+    ax2.set_yticklabels(bar_labels, fontsize=12, fontproperties=fp)
     ax2.invert_yaxis()
     ax2.axvline(x=0, color='gray', linewidth=0.8)
-    ax2.set_title(f'{year}/{month:02d} 收支明細', fontsize=18, fontweight='bold', pad=15)
+    ax2.set_title(f'{year}/{month:02d} 收支明細', fontsize=18, fontweight='bold', pad=15, fontproperties=fp)
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
     ax2.grid(axis='x', linestyle='--', alpha=0.3)
 
     for bar, val in zip(bars, bar_values):
         width = bar.get_width()
-        sign = ''
         x = width + (max(map(abs, bar_values)) * 0.01) if width >= 0 else width - (max(map(abs, bar_values)) * 0.01)
         ha = 'left' if width >= 0 else 'right'
-        ax2.text(x, bar.get_y() + bar.get_height()/2, f'{sign}${abs(int(val)):,}',
-                 va='center', ha=ha, fontsize=11, fontweight='bold')
+        ax2.text(x, bar.get_y() + bar.get_height()/2, f'${abs(int(val)):,}',
+                 va='center', ha=ha, fontsize=11, fontweight='bold', fontproperties=fp)
 
-    # 底部摘要文字
-    summary = f'毛薪 ${total:,}  |  油費 −${fuel_amt:,}  |  停車 −${park_amt:,}  |  淨薪 ${net:,}'
-    fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333')
+    summary = f'毛薪 ${total:,}  |  油費 -${fuel_amt:,}  |  停車 -${park_amt:,}  |  淨薪 ${net:,}'
+    fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333', fontproperties=fp)
 
-    plt.tight_layout(rect=[0, 0.04, 1, 1])
-    plt.savefig(filepath, dpi=120, bbox_inches='tight', facecolor=fig.get_facecolor())
+    plt.subplots_adjust(left=0.15, right=0.95, top=0.93, bottom=0.08, hspace=0.35)
+    plt.savefig(filepath, dpi=120, facecolor=fig.get_facecolor())
     plt.close(fig)
     return True
