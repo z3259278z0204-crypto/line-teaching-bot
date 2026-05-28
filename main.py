@@ -1,6 +1,8 @@
 import os
 import re
 import uuid
+import threading
+import traceback
 from datetime import datetime, timezone, timedelta
 from flask import Flask, request, abort, send_file
 
@@ -68,28 +70,48 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    user_id = event.source.user_id
-    text = event.message.text.strip()
-    reply = process(user_id, text)
+    # 先讓 webhook 秒回 200 給 LINE，實際處理丟到背景執行緒，
+    # 避免查試算表/問 AI/畫圖太久導致 LINE 逾時、已讀不回。
+    threading.Thread(target=_reply_async, args=(event,), daemon=True).start()
 
-    if isinstance(reply, dict) and reply.get('type') == 'image':
-        messages = []
-        if reply.get('text'):
-            messages.append(TextMessage(text=reply['text']))
-        messages.append(ImageMessage(
-            originalContentUrl=reply['image_url'],
-            previewImageUrl=reply['image_url'],
-        ))
-    else:
-        messages = [TextMessage(text=reply)]
 
-    with ApiClient(configuration) as client:
-        MessagingApi(client).reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=messages,
+def _reply_async(event):
+    try:
+        user_id = event.source.user_id
+        text = event.message.text.strip()
+        reply = process(user_id, text)
+
+        if isinstance(reply, dict) and reply.get('type') == 'image':
+            messages = []
+            if reply.get('text'):
+                messages.append(TextMessage(text=reply['text']))
+            messages.append(ImageMessage(
+                originalContentUrl=reply['image_url'],
+                previewImageUrl=reply['image_url'],
+            ))
+        else:
+            messages = [TextMessage(text=reply)]
+
+        with ApiClient(configuration) as client:
+            MessagingApi(client).reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=messages,
+                )
             )
-        )
+    except Exception:
+        traceback.print_exc()
+        # 處理過程出錯時，盡量回個訊息而不是裝死（reply_token 還沒過期才會成功）
+        try:
+            with ApiClient(configuration) as client:
+                MessagingApi(client).reply_message(
+                    ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text='⚠️ 系統忙線中，請稍等幾秒再傳一次。')],
+                    )
+                )
+        except Exception:
+            pass
 
 
 def process(user_id, text):
