@@ -175,14 +175,8 @@ def process(user_id, text):
         return parking_monthly_summary()
 
     if text in ('記錄停車', '紀錄停車', '新增停車'):
-        return (
-            '🅿️ 記錄停車費用法：\n\n'
-            '🔸 停車 50\n'
-            '🔸 停車 50 仁愛親子館\n\n'
-            '其他指令：\n'
-            '🔸 本月停車 → 月度摘要\n'
-            '🔸 刪除最後停車 → 反悔'
-        )
+        db.set_state(user_id, 'waiting_parking_amount', None, None)
+        return '🅿️ 開始記錄停車費\n\n1️⃣ 金額？（例如：50）\n（或說「取消」中止）'
 
     if text in ('刪除最後停車', '刪除停車', '刪除最後一筆停車'):
         try:
@@ -483,6 +477,30 @@ def process(user_id, text):
             f'{icon} {data["type"]}｜{data["category"]}\n'
             f'💰 ${data["amount"]:,}{notes_str}\n\n'
             '說「本月記帳」可看收支摘要'
+        )
+
+    if state == 'waiting_parking_amount':
+        try:
+            amount = int(float(text.replace('$', '').replace(',', '').replace('元', '').strip()))
+        except ValueError:
+            return '⚠️ 金額要是數字，例如：50\n（或說「取消」中止）'
+        db.set_state(user_id, 'waiting_parking_location', _json.dumps({'amount': amount}), None)
+        return f'✅ 金額：${amount:,}\n\n2️⃣ 地點？（直接說「無」可跳過）'
+
+    if state == 'waiting_parking_location':
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        location = '' if text in ('無', '跳過') else text.strip()
+        try:
+            save_parking(data['amount'], location)
+        except Exception as ex:
+            db.clear_state(user_id)
+            return f'⚠️ 寫入失敗：{ex}'
+        db.clear_state(user_id)
+        loc_str = f'\n📍 {location}' if location else ''
+        return (
+            f'✅ 停車費記錄完成！\n\n'
+            f'💰 ${data["amount"]:,}{loc_str}\n\n'
+            '說「本月停車」可看月度摘要'
         )
 
     if state == 'waiting_week':
