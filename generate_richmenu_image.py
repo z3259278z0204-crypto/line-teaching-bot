@@ -6,7 +6,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 WIDTH, HEIGHT = 2500, 1686
-COLS, ROWS = 4, 2
+COLS, ROWS = 3, 3
 CELL_W, CELL_H = WIDTH // COLS, HEIGHT // ROWS
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'NotoSansTC-Regular.otf')
@@ -123,6 +123,30 @@ def icon_tools(draw, cx, cy, size, color):
                             radius=int(size*0.03), fill='white')
 
 
+def icon_ledger(draw, cx, cy, size, color):
+    w = size * 0.82
+    h = size * 0.96
+    x0, y0 = cx - w/2, cy - h/2
+    # 帳本封面外框
+    draw.rounded_rectangle((x0, y0, x0+w, y0+h), radius=int(w*0.08),
+                            outline=color, width=int(size*0.05))
+    # 左側裝訂邊
+    spine_x = x0 + w*0.24
+    draw.line((spine_x, y0, spine_x, y0+h), fill=color, width=int(size*0.045))
+    # 裝訂孔
+    hole_x = x0 + w*0.12
+    rr = size*0.032
+    for fy in (0.32, 0.68):
+        hy = y0 + h*fy
+        draw.ellipse((hole_x-rr, hy-rr, hole_x+rr, hy+rr), fill=color)
+    # 右側帳目線（三條）
+    line_x0 = spine_x + w*0.12
+    line_x1 = x0 + w - w*0.12
+    for fy in (0.34, 0.5, 0.66):
+        ly = y0 + h*fy
+        draw.line((line_x0, ly, line_x1, ly), fill=color, width=int(size*0.035))
+
+
 def icon_help(draw, cx, cy, size, color):
     r = size // 2
     draw.ellipse((cx-r, cy-r, cx+r, cy+r),
@@ -135,7 +159,7 @@ def icon_help(draw, cx, cy, size, color):
               '?', font=pf, fill=color)
 
 
-# 8 格內容（順序對應 rich_menu.py 的 ACTIONS）
+# 9 格內容（順序對應 rich_menu.py 的 ACTIONS）
 CELLS = [
     (icon_calendar, '今天行程'),
     (icon_plus,     '新增行程'),
@@ -144,37 +168,40 @@ CELLS = [
     (icon_money,    '本月薪資'),
     (icon_chart,    '薪資圖表'),
     (icon_tools,    '記錄器材'),
+    (icon_ledger,   '記帳'),
     (icon_help,     '說明'),
 ]
 
-# 螢光色配色
-COLORS = ['#5EE7DF', '#7DFFB3', '#FFA45B', '#FFD66B',
-          '#FFCB47', '#C792EA', '#6BB1FF', '#9CA3AF']
+# 螢光色配色（9 格，相鄰格避免同色系）
+COLORS = ['#5EE7DF', '#7DFFB3', '#FFA45B',
+          '#FFD66B', '#C792EA', '#6BB1FF',
+          '#FF8FA3', '#B0FF6B', '#9CA3AF']
 
 
 def main():
     img = Image.new('RGB', (WIDTH, HEIGHT), '#0F1119')
     draw = ImageDraw.Draw(img)
 
+    icon_size = 210
+    label_font = ImageFont.truetype(FONT_PATH, 80)
     for i, (icon_fn, label) in enumerate(CELLS):
         col, row = i % COLS, i // COLS
         x0, y0 = col*CELL_W, row*CELL_H
-        pad = 26
+        pad = 24
         color = COLORS[i]
         # 卡片：深色
         draw.rounded_rectangle((x0+pad, y0+pad, x0+CELL_W-pad, y0+CELL_H-pad),
-                                radius=58, fill='#1C2034')
+                                radius=52, fill='#1C2034')
         cx = x0 + CELL_W//2
-        cy = y0 + CELL_H//2 - 100
+        cy = y0 + int(CELL_H*0.38)
         # icon
-        icon_fn(draw, cx, cy, 260, color)
+        icon_fn(draw, cx, cy, icon_size, color)
         # label
-        lf = ImageFont.truetype(FONT_PATH, 92)
-        bbox = draw.textbbox((0,0), label, font=lf)
+        bbox = draw.textbbox((0,0), label, font=label_font)
         tw = bbox[2]-bbox[0]
         lx = x0 + (CELL_W - tw)//2 - bbox[0]
-        ly = y0 + CELL_H - 200
-        draw.text((lx, ly), label, font=lf, fill='#FFFFFF')
+        ly = y0 + CELL_H - 170
+        draw.text((lx, ly), label, font=label_font, fill='#FFFFFF')
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'assets'), exist_ok=True)
     out_path = os.path.join(os.path.dirname(__file__), 'assets', 'richmenu.png')

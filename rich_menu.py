@@ -8,7 +8,7 @@ LINE_DATA_API = 'https://api-data.line.me/v2/bot'
 IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets', 'richmenu.png')
 
 WIDTH, HEIGHT = 2500, 1686
-COLS, ROWS = 4, 2
+COLS, ROWS = 3, 3
 COL_W, ROW_H = WIDTH // COLS, HEIGHT // ROWS
 
 # 對應 generate_richmenu_image.py 的 CELLS 順序
@@ -20,6 +20,7 @@ ACTIONS = [
     '本月薪資',
     '薪資圖表',
     '記錄器材',
+    '記帳',
     '說明',
 ]
 
