@@ -208,3 +208,18 @@ def _get_sheet_id(sheet_name):
         if props.get('title') == sheet_name:
             return props.get('sheetId')
     raise ValueError(f'找不到分頁：{sheet_name}')
+
+
+def ensure_sheet(sheet_name, headers):
+    """分頁不存在就自動建立並寫入標頭列。"""
+    sid = _spreadsheet_id()
+    data = _request(f'{SHEETS_BASE}/{sid}?fields=sheets.properties')
+    titles = [s.get('properties', {}).get('title') for s in data.get('sheets', [])]
+    if sheet_name in titles:
+        return
+    _request(f'{SHEETS_BASE}/{sid}:batchUpdate', method='POST', body={
+        'requests': [{'addSheet': {'properties': {'title': sheet_name}}}]
+    })
+    rng = urllib.parse.quote(f'{sheet_name}!A1')
+    url = f'{SHEETS_BASE}/{sid}/values/{rng}?valueInputOption=USER_ENTERED'
+    _request(url, method='PUT', body={'values': [headers]})

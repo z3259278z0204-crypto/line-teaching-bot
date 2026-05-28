@@ -13,6 +13,7 @@ sys.setrecursionlimit(5000)
 from sheets_helper import read_all
 from fuel import monthly_total as fuel_monthly_total
 from parking import monthly_total as parking_monthly_total
+from ledger import monthly_total as ledger_monthly_total
 
 TAIWAN_TZ = timezone(timedelta(hours=8))
 
@@ -77,7 +78,11 @@ def generate_salary_chart_png(filepath, year=None, month=None):
         park_amt, park_n = parking_monthly_total(year, month)
     except Exception:
         park_amt, park_n = 0, 0
-    net = total - fuel_amt - park_amt
+    try:
+        ledger_exp, _ = ledger_monthly_total(year, month)
+    except Exception:
+        ledger_exp = 0
+    net = total - fuel_amt - park_amt - ledger_exp
 
     sorted_items = sorted(by_title.items(), key=lambda x: -x[1])
     labels = [t for t, _ in sorted_items]
@@ -127,6 +132,10 @@ def generate_salary_chart_png(filepath, year=None, month=None):
         bar_labels.append('停車')
         bar_values.append(-park_amt)
         bar_colors.append('#FFB74D')
+    if ledger_exp > 0:
+        bar_labels.append('記帳支出')
+        bar_values.append(-ledger_exp)
+        bar_colors.append('#BA68C8')
 
     bars = ax2.barh(range(len(bar_labels)), bar_values, color=bar_colors, edgecolor='white', linewidth=1.5)
     ax2.set_yticks(range(len(bar_labels)))
@@ -153,7 +162,15 @@ def generate_salary_chart_png(filepath, year=None, month=None):
                  va='center', ha=ha, fontsize=11, fontweight='bold', color=color)
     ax2.set_xlim(-max_abs * 1.15, max_abs * 1.15)
 
-    summary = f'毛薪 ${total:,}  |  油費 -${fuel_amt:,}  |  停車 -${park_amt:,}  |  淨薪 ${net:,}'
+    summary_parts = [f'毛薪 ${total:,}']
+    if fuel_amt > 0:
+        summary_parts.append(f'油費 -${fuel_amt:,}')
+    if park_amt > 0:
+        summary_parts.append(f'停車 -${park_amt:,}')
+    if ledger_exp > 0:
+        summary_parts.append(f'記帳 -${ledger_exp:,}')
+    summary_parts.append(f'淨薪 ${net:,}')
+    summary = '  |  '.join(summary_parts)
     fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333')
 
     plt.subplots_adjust(left=0.22, right=0.78, top=0.94, bottom=0.06, hspace=0.30)

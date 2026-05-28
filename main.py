@@ -22,6 +22,7 @@ from ai_chat import ask_ai
 from salary import monthly_summary, list_prices, monthly_chart
 from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance, oil_change_warning, delete_last_fuel
 from parking import save_parking, monthly_summary as parking_monthly_summary, monthly_total as parking_monthly_total, delete_last_parking
+from ledger import save_entry as ledger_save_entry, monthly_summary as ledger_monthly_summary, delete_last_entry as ledger_delete_last, EXPENSE_CATEGORIES, INCOME_CATEGORIES
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -111,6 +112,10 @@ def process(user_id, text):
             '⛽ 加油\n'
             '🔸 記錄加油 → 開始新增\n'
             '🔸 本月加油 → 月度摘要 + 油耗\n\n'
+            '📒 記帳\n'
+            '🔸 記帳 → 開始記一筆（收入/支出）\n'
+            '🔸 本月記帳 → 收支摘要\n'
+            '🔸 刪除最後記帳 → 反悔\n\n'
             '🧰 器材記錄\n'
             '🔸 記錄器材 → 開始新增\n'
             '🔸 查看記錄 → 最近5筆\n'
@@ -203,6 +208,22 @@ def process(user_id, text):
                 return f'⚠️ 寫入失敗：{ex}'
             loc_str = f'\n📍 {location}' if location else ''
             return f'✅ 停車費記錄完成！\n\n💰 ${amount:,}{loc_str}'
+
+    if text in ('本月記帳', '記帳記錄', '查記帳', '本月收支', '收支'):
+        return ledger_monthly_summary()
+
+    if text in ('刪除最後記帳', '刪除記帳', '刪除最後一筆記帳'):
+        try:
+            desc = ledger_delete_last()
+        except Exception as ex:
+            return f'⚠️ 刪除失敗：{ex}'
+        if not desc:
+            return '記帳記錄是空的，沒有可刪除的資料。'
+        return f'🗑️ 已刪除最後一筆記帳：\n{desc}'
+
+    if text in ('記帳', '記一筆', '新增記帳', '記錄記帳', '紀錄記帳'):
+        db.set_state(user_id, 'waiting_ledger_type', None, None)
+        return '📒 開始記帳\n\n1️⃣ 這筆是收入還是支出？\n（說「收入」或「支出」，或說「取消」中止）'
 
     if text in ('同步', '同步薪資', '同步行事曆', 'sync'):
         from sync import sync_salary
@@ -408,6 +429,60 @@ def process(user_id, text):
             f'💰 金額：${data["amount"]:,}{station_str}{oil_str}'
             f'{perf_str}{oil_warn}\n\n'
             '說「本月加油」可看月度摘要'
+        )
+
+    if state == 'waiting_ledger_type':
+        if '收入' in text:
+            entry_type = '收入'
+            cats = INCOME_CATEGORIES
+        elif '支出' in text:
+            entry_type = '支出'
+            cats = EXPENSE_CATEGORIES
+        else:
+            return '⚠️ 請說「收入」或「支出」\n（或說「取消」中止）'
+        db.set_state(user_id, 'waiting_ledger_category', _json.dumps({'type': entry_type}), None)
+        cat_lines = '\n'.join(f'{i + 1}. {c}' for i, c in enumerate(cats))
+        return f'✅ 類型：{entry_type}\n\n2️⃣ 選類別（回數字或直接打字）：\n{cat_lines}'
+
+    if state == 'waiting_ledger_category':
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        cats = INCOME_CATEGORIES if data.get('type') == '收入' else EXPENSE_CATEGORIES
+        if text.isdigit() and 1 <= int(text) <= len(cats):
+            category = cats[int(text) - 1]
+        else:
+            category = text.strip()
+        if not category:
+            return '⚠️ 請選類別（回數字或直接打字）'
+        data['category'] = category
+        db.set_state(user_id, 'waiting_ledger_amount', _json.dumps(data), None)
+        return f'✅ 類別：{category}\n\n3️⃣ 金額？（例如：120）'
+
+    if state == 'waiting_ledger_amount':
+        try:
+            amount = int(float(text.replace('$', '').replace(',', '').replace('元', '').strip()))
+        except ValueError:
+            return '⚠️ 金額要是數字，例如：120\n（或說「取消」中止）'
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        data['amount'] = amount
+        db.set_state(user_id, 'waiting_ledger_notes', _json.dumps(data), None)
+        return f'✅ 金額：${amount:,}\n\n4️⃣ 備註？（直接說「無」可跳過）'
+
+    if state == 'waiting_ledger_notes':
+        data = _json.loads(db.get_temp_week(user_id) or '{}')
+        notes = '' if text in ('無', '跳過') else text
+        try:
+            ledger_save_entry(data['type'], data['category'], data['amount'], notes)
+        except Exception as ex:
+            db.clear_state(user_id)
+            return f'⚠️ 寫入失敗：{ex}'
+        db.clear_state(user_id)
+        icon = '📥' if data['type'] == '收入' else '📤'
+        notes_str = f'\n📝 {notes}' if notes else ''
+        return (
+            f'✅ 記帳完成！\n\n'
+            f'{icon} {data["type"]}｜{data["category"]}\n'
+            f'💰 ${data["amount"]:,}{notes_str}\n\n'
+            '說「本月記帳」可看收支摘要'
         )
 
     if state == 'waiting_week':

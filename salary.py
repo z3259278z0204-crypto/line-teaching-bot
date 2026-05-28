@@ -3,6 +3,7 @@ from collections import defaultdict
 from sheets_helper import read_all
 from fuel import monthly_total as fuel_monthly_total
 from parking import monthly_total as parking_monthly_total
+from ledger import monthly_total as ledger_monthly_total
 
 TAIWAN_TZ = timezone(timedelta(hours=8))
 
@@ -61,12 +62,18 @@ def monthly_summary(year=None, month=None):
         park_amt, park_n = parking_monthly_total(year, month)
     except Exception:
         park_amt, park_n = 0, 0
-    if fuel_amt > 0 or park_amt > 0:
+    try:
+        ledger_exp, _ = ledger_monthly_total(year, month)
+    except Exception:
+        ledger_exp = 0
+    if fuel_amt > 0 or park_amt > 0 or ledger_exp > 0:
         if fuel_amt > 0:
             lines.append(f'⛽ 油費：−${fuel_amt:,}（{fuel_n} 次）')
         if park_amt > 0:
             lines.append(f'🅿️ 停車：−${park_amt:,}（{park_n} 次）')
-        net = total - fuel_amt - park_amt
+        if ledger_exp > 0:
+            lines.append(f'📒 記帳支出：−${ledger_exp:,}')
+        net = total - fuel_amt - park_amt - ledger_exp
         lines.append(f'💎 淨薪：${net:,}')
     return '\n'.join(lines)
 
@@ -118,6 +125,10 @@ def monthly_chart(year=None, month=None):
         park_amt, park_n = parking_monthly_total(year, month)
     except Exception:
         park_amt, park_n = 0, 0
+    try:
+        ledger_exp, _ = ledger_monthly_total(year, month)
+    except Exception:
+        ledger_exp = 0
     if fuel_amt > 0:
         bar_len_fuel = max(1, round(fuel_amt / max_amount * bar_max))
         lines.append('⛽ 油費')
@@ -128,6 +139,11 @@ def monthly_chart(year=None, month=None):
         lines.append('🅿️ 停車')
         lines.append(f'{"▒" * bar_len_park} −${park_amt:,} ({park_n}次)')
         lines.append('')
+    if ledger_exp > 0:
+        bar_len_led = max(1, round(ledger_exp / max_amount * bar_max))
+        lines.append('📒 記帳支出')
+        lines.append(f'{"▒" * bar_len_led} −${ledger_exp:,}')
+        lines.append('')
 
     lines.append('━━━━━━━━━━')
     lines.append(f'💵 毛薪：${total:,} / {count} 堂')
@@ -135,8 +151,10 @@ def monthly_chart(year=None, month=None):
         lines.append(f'⛽ 油費：−${fuel_amt:,}')
     if park_amt > 0:
         lines.append(f'🅿️ 停車：−${park_amt:,}')
-    if fuel_amt > 0 or park_amt > 0:
-        lines.append(f'💎 淨薪：${total - fuel_amt - park_amt:,}')
+    if ledger_exp > 0:
+        lines.append(f'📒 記帳支出：−${ledger_exp:,}')
+    if fuel_amt > 0 or park_amt > 0 or ledger_exp > 0:
+        lines.append(f'💎 淨薪：${total - fuel_amt - park_amt - ledger_exp:,}')
     return '\n'.join(lines)
 
 
