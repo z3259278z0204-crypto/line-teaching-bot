@@ -88,8 +88,10 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     labels = [t for t, _ in sorted_items]
     values = [v for _, v in sorted_items]
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12))
+    fig = plt.figure(figsize=(10, 13))
     fig.patch.set_facecolor('#FAFAFA')
+    ax1 = fig.add_axes([0.03, 0.54, 0.54, 0.42])   # 圓餅圖（放大、佔滿左上）
+    ax2 = fig.add_axes([0.22, 0.06, 0.73, 0.38])   # 收支長條（左留白給課程名）
 
     cmap = matplotlib.colormaps['tab20']
     colors = [cmap(i % 20) for i in range(len(labels))]
@@ -171,7 +173,6 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     summary = '  |  '.join(summary_parts)
     fig.text(0.5, 0.02, summary, ha='center', fontsize=13, fontweight='bold', color='#333')
 
-    plt.subplots_adjust(left=0.22, right=0.78, top=0.94, bottom=0.06, hspace=0.30)
     plt.savefig(filepath, dpi=120, facecolor=fig.get_facecolor())
     plt.close(fig)
     return True
