@@ -302,7 +302,7 @@ def process(user_id, text):
 
     if text in ('取消', 'cancel'):
         db.clear_state(user_id)
-        return '已取消目前操作。說「記錄器材」可重新開始。'
+        return '已取消目前操作。可從選單重新開始，或說「說明」看所有指令。'
 
     # 狀態機
     state = db.get_state(user_id)
