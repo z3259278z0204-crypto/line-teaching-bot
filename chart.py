@@ -94,21 +94,18 @@ def generate_salary_chart_png(filepath, year=None, month=None):
     cmap = matplotlib.colormaps['tab20']
     colors = [cmap(i % 20) for i in range(len(labels))]
 
-    # === 上：圓餅圖 ===
+    # === 上：圓餅圖（課程名全移到右側圖例，餅上只留大區塊百分比）===
     SMALL_PCT = 5.0
-    pie_labels = [lab if (v / total * 100) >= SMALL_PCT else '' for lab, v in zip(labels, values)]
     def _autopct(p):
         return f'{p:.0f}%' if p >= SMALL_PCT else ''
 
     wedges, texts, autotexts = ax1.pie(
         values,
-        labels=pie_labels,
         colors=colors,
         autopct=_autopct,
         startangle=90,
-        textprops={'fontsize': 11},
         wedgeprops={'edgecolor': 'white', 'linewidth': 2},
-        pctdistance=0.75,
+        pctdistance=0.78,
     )
     for t in autotexts:
         t.set_color('white')
@@ -116,8 +113,9 @@ def generate_salary_chart_png(filepath, year=None, month=None):
         t.set_fontsize(11)
     ax1.set_title(f'{year}/{month:02d} 薪資分布', fontsize=18, fontweight='bold', pad=20)
 
-    legend_labels = [f'{lab}  ${val:,}' for lab, val in zip(labels, values)]
-    ax1.legend(wedges, legend_labels, loc='center left', bbox_to_anchor=(1.0, 0.5),
+    legend_labels = [f'{lab}  ${val:,}（{val / total * 100:.0f}%）'
+                     for lab, val in zip(labels, values)]
+    ax1.legend(wedges, legend_labels, loc='center left', bbox_to_anchor=(1.02, 0.5),
                fontsize=9, frameon=False)
 
     # === 下：長條圖 ===
