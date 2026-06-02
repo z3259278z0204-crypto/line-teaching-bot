@@ -114,6 +114,75 @@ def _reply_async(event):
             pass
 
 
+_CN_MONTH = {
+    '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6,
+    '七': 7, '八': 8, '九': 9, '十': 10, '十一': 11, '十二': 12,
+}
+
+
+def _to_month(s):
+    s = s.strip()
+    if s in _CN_MONTH:
+        return _CN_MONTH[s]
+    try:
+        n = int(s)
+        return n if 1 <= n <= 12 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_year_month(text):
+    """從訊息開頭解析年月。回傳 (year, month, 剩餘字串) 或 None。
+    支援：『2025/12 薪資』『去年12月圖表』『3月薪資』『十二月薪資』。"""
+    now = datetime.now(TAIWAN_TZ)
+    t = text.strip()
+
+    m = re.match(r'^\s*(\d{4})\s*[/\-\.年]\s*(\d{1,2})\s*月?\s*(.*)$', t)
+    if m:
+        mn = _to_month(m.group(2))
+        if mn:
+            return int(m.group(1)), mn, m.group(3).strip()
+
+    m = re.match(r'^\s*(去年|今年|明年)\s*(\d{1,2}|[一二三四五六七八九十]{1,2})\s*月\s*(.*)$', t)
+    if m:
+        offset = {'去年': -1, '今年': 0, '明年': 1}[m.group(1)]
+        mn = _to_month(m.group(2))
+        if mn:
+            return now.year + offset, mn, m.group(3).strip()
+
+    m = re.match(r'^\s*(\d{1,2}|[一二三四五六七八九十]{1,2})\s*月\s*(.*)$', t)
+    if m:
+        mn = _to_month(m.group(1))
+        if mn:
+            return now.year, mn, m.group(2).strip()
+
+    return None
+
+
+def _send_salary_chart(year=None, month=None):
+    """產 PNG 薪資圖；失敗自動退回文字版。給定 year/month 則查指定月份。"""
+    try:
+        from chart import generate_salary_chart_png
+        token = uuid.uuid4().hex[:10]
+        filepath = f'/tmp/chart_{token}.png'
+        ok = generate_salary_chart_png(filepath, year, month)
+        if not ok:
+            return monthly_chart(year, month)
+        db.save_token(token, filepath)
+        url = f'{BASE_URL}/image/{token}.png'
+        return {
+            'type': 'image',
+            'image_url': url,
+            'text': monthly_summary(year, month),
+        }
+    except Exception:
+        import sys
+        tb_lines = traceback.format_exc().strip().split('\n')
+        head = '\n'.join(tb_lines[:6])
+        tail = '\n'.join(tb_lines[-4:])
+        return f'⚠️ 圖表產生失敗 [v7 py={sys.version_info.major}.{sys.version_info.minor}]\n\n=頭=\n{head}\n\n=尾=\n{tail}\n\n（已退回文字版）\n\n' + monthly_chart(year, month)
+
+
 def process(user_id, text):
     text_lower = text.lower()
 
@@ -160,26 +229,16 @@ def process(user_id, text):
         return list_prices()
 
     if text in ('薪資圖表', '圖表', '本月圖表', '薪資視覺化', '視覺化'):
-        try:
-            from chart import generate_salary_chart_png
-            token = uuid.uuid4().hex[:10]
-            filepath = f'/tmp/chart_{token}.png'
-            ok = generate_salary_chart_png(filepath)
-            if not ok:
-                return monthly_chart()
-            db.save_token(token, filepath)
-            url = f'{BASE_URL}/image/{token}.png'
-            return {
-                'type': 'image',
-                'image_url': url,
-                'text': monthly_summary(),
-            }
-        except Exception as ex:
-            import traceback, sys
-            tb_lines = traceback.format_exc().strip().split('\n')
-            head = '\n'.join(tb_lines[:6])
-            tail = '\n'.join(tb_lines[-4:])
-            return f'⚠️ 圖表產生失敗 [v7 py={sys.version_info.major}.{sys.version_info.minor}]\n\n=頭=\n{head}\n\n=尾=\n{tail}\n\n（已退回文字版）\n\n' + monthly_chart()
+        return _send_salary_chart()
+
+    # 指定年月：3月薪資 / 2025/12 圖表 / 去年12月薪資 ...
+    parsed = _parse_year_month(text)
+    if parsed:
+        y, m, rest = parsed
+        if rest in ('薪資', '收入', '查薪資', '看薪資', '本月薪資'):
+            return monthly_summary(y, m)
+        if rest in ('圖表', '視覺化', '薪資圖表', '薪資視覺化', '本月圖表'):
+            return _send_salary_chart(y, m)
 
     if text in ('本月加油', '加油記錄', '查加油', '看加油'):
         return fuel_monthly_summary()
