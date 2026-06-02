@@ -18,6 +18,18 @@ def _parse_date(s):
     return None
 
 
+def _lessons_of(row):
+    """讀「堂數」欄，空白或無欄位時當 1 堂處理。"""
+    raw = str(row.get('堂數', '') or '').strip()
+    if not raw:
+        return 1
+    try:
+        n = int(float(raw))
+    except (ValueError, TypeError):
+        return 1
+    return max(1, n)
+
+
 def monthly_summary(year=None, month=None):
     """回傳指定月份的薪資摘要訊息。預設本月。"""
     now = datetime.now(TAIWAN_TZ)
@@ -37,11 +49,13 @@ def monthly_summary(year=None, month=None):
             price = int(str(row.get('單價', '')).strip())
         except (ValueError, TypeError):
             continue
-        total += price
-        count += 1
+        lessons = _lessons_of(row)
+        amount = price * lessons
+        total += amount
+        count += lessons
         title = (row.get('標題') or '').strip() or '未分類'
-        by_keyword[title]['count'] += 1
-        by_keyword[title]['amount'] += price
+        by_keyword[title]['count'] += lessons
+        by_keyword[title]['amount'] += amount
 
     if count == 0:
         return f'📊 {year}/{month:02d} 還沒有薪資記錄'
@@ -97,11 +111,13 @@ def monthly_chart(year=None, month=None):
             price = int(str(row.get('單價', '')).strip())
         except (ValueError, TypeError):
             continue
-        total += price
-        count += 1
+        lessons = _lessons_of(row)
+        amount = price * lessons
+        total += amount
+        count += lessons
         title = (row.get('標題') or '').strip() or '未分類'
-        by_title[title]['count'] += 1
-        by_title[title]['amount'] += price
+        by_title[title]['count'] += lessons
+        by_title[title]['amount'] += amount
 
     if count == 0:
         return f'📊 {year}/{month:02d} 還沒有薪資記錄'

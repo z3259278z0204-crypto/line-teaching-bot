@@ -245,6 +245,10 @@ def process(user_id, text):
         from sync import sync_salary
         return sync_salary()
 
+    if text in ('回填堂數', '補堂數', '回補堂數'):
+        from backfill_lessons import backfill_lessons
+        return backfill_lessons()
+
     if text in ('記錄加油', '紀錄加油', '加油', '新增加油'):
         db.set_state(user_id, 'waiting_fuel_mileage', None, None)
         return '⛽ 開始記錄加油\n\n1️⃣ 目前里程？（例如：56000）'

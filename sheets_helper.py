@@ -200,6 +200,40 @@ def delete_row_by_dict(sheet_name, criteria):
     return True
 
 
+def _col_letter(n):
+    """0-based 欄索引轉 A1 欄字母（0→A, 25→Z, 26→AA）。"""
+    s = ''
+    n = n + 1
+    while n > 0:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def update_cells(sheet_name, updates):
+    """批次更新指定格。updates = [(row_idx_1based, 欄位名, 新值), ...]。
+    依分頁標頭定位欄位，找不到的欄位會被略過。回傳實際送出的格數。"""
+    if not updates:
+        return 0
+    headers = _read_headers(sheet_name)
+    header_idx = {h: i for i, h in enumerate(headers)}
+    data = []
+    for row_idx, col_name, value in updates:
+        if col_name not in header_idx:
+            continue
+        rng = f'{sheet_name}!{_col_letter(header_idx[col_name])}{row_idx}'
+        data.append({'range': rng, 'values': [[str(value)]]})
+    if not data:
+        return 0
+    sid = _spreadsheet_id()
+    url = f'{SHEETS_BASE}/{sid}/values:batchUpdate'
+    _request(url, method='POST', body={
+        'valueInputOption': 'USER_ENTERED',
+        'data': data,
+    })
+    return len(data)
+
+
 def _get_sheet_id(sheet_name):
     sid = _spreadsheet_id()
     data = _request(f'{SHEETS_BASE}/{sid}?fields=sheets.properties')

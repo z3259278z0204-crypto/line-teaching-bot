@@ -42,6 +42,17 @@ def _parse_date(s):
     return None
 
 
+def _lessons_of(row):
+    raw = str(row.get('堂數', '') or '').strip()
+    if not raw:
+        return 1
+    try:
+        n = int(float(raw))
+    except (ValueError, TypeError):
+        return 1
+    return max(1, n)
+
+
 def generate_salary_chart_png(filepath, year=None, month=None):
     """產生薪資圓餅圖 + 長條圖，存到 filepath。回傳 True 表示成功、False 表示無資料。"""
     now = datetime.now(TAIWAN_TZ)
@@ -62,10 +73,12 @@ def generate_salary_chart_png(filepath, year=None, month=None):
             price = int(str(row.get('單價', '')).strip())
         except (ValueError, TypeError):
             continue
+        lessons = _lessons_of(row)
+        amount = price * lessons
         title = (row.get('標題') or '').strip() or '未分類'
-        by_title[title] += price
-        total += price
-        count += 1
+        by_title[title] += amount
+        total += amount
+        count += lessons
 
     if count == 0:
         return False

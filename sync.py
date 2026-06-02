@@ -69,6 +69,21 @@ def _event_key(e):
     return t.strftime('%Y/%m/%d'), t.strftime('%H:%M'), title
 
 
+def _lessons_from_event(e):
+    """依事件時長換算堂數：四捨五入到最近的整堂、至少 1 堂。"""
+    start = e.get('start', {})
+    end = e.get('end', {})
+    if 'dateTime' not in start or 'dateTime' not in end:
+        return 1
+    try:
+        s = datetime.fromisoformat(start['dateTime'])
+        t = datetime.fromisoformat(end['dateTime'])
+    except ValueError:
+        return 1
+    minutes = (t - s).total_seconds() / 60
+    return max(1, int(minutes / 60 + 0.5))
+
+
 def _load_price_table():
     """讀一次價目表，回傳 [(關鍵字, 單價), ...]"""
     rows = read_all('價目表')
@@ -105,7 +120,7 @@ def sync_salary():
         return f'⚠️ 讀取價目表失敗：{ex}'
 
     # 篩出有匹配價目表的 events
-    matched_events = []  # [(date_str, time_str, title, price, keyword)]
+    matched_events = []  # [(date_str, time_str, title, price, keyword, lessons)]
     skipped_no_price = 0
     for e in events:
         key = _event_key(e)
@@ -116,7 +131,8 @@ def sync_salary():
         if price is None:
             skipped_no_price += 1
             continue
-        matched_events.append((d, t, title, price, keyword))
+        lessons = _lessons_from_event(e)
+        matched_events.append((d, t, title, price, keyword, lessons))
 
     # 讀取現有薪資（記住每筆對應的 Sheet 列號，從 2 開始：1 是標頭）
     salary_rows = read_all(SALARY_SHEET)
@@ -130,14 +146,14 @@ def sync_salary():
             existing_keys.add((d, t, title))
             key_to_row_idx[(d, t, title)] = i
 
-    event_keys = {(d, t, title) for d, t, title, _, _ in matched_events}
+    event_keys = {(d, t, title) for d, t, title, _, _, _ in matched_events}
 
     # 補：批次寫入 Calendar 有但 Sheet 沒有的
     to_add = []
-    for d, t, title, price, keyword in matched_events:
+    for d, t, title, price, keyword, lessons in matched_events:
         if (d, t, title) not in existing_keys:
             to_add.append({
-                '日期': d, '時間': t, '標題': title, '單價': price,
+                '日期': d, '時間': t, '標題': title, '單價': price, '堂數': lessons,
                 '備註': f'匹配關鍵字：{keyword}（自動同步）',
             })
     added = 0
