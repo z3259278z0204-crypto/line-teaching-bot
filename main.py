@@ -308,6 +308,11 @@ def process(user_id, text):
         from backfill_lessons import backfill_lessons
         return backfill_lessons()
 
+    if text.startswith(('查 ', '查關鍵字 ', 'debug ', 'Debug ', '診斷 ')):
+        from debug_keyword import debug_keyword
+        needle = text.split(' ', 1)[1].strip()
+        return debug_keyword(needle)
+
     if text in ('記錄加油', '紀錄加油', '加油', '新增加油'):
         db.set_state(user_id, 'waiting_fuel_mileage', None, None)
         return '⛽ 開始記錄加油\n\n1️⃣ 目前里程？（例如：56000）'
