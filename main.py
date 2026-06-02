@@ -308,10 +308,10 @@ def process(user_id, text):
         from backfill_lessons import backfill_lessons
         return backfill_lessons()
 
-    if text.startswith(('查 ', '查關鍵字 ', 'debug ', 'Debug ', '診斷 ')):
+    _debug_m = re.match(r'^(?:查關鍵字|診斷|debug|Debug|查)[\s　]+(.+)$', text)
+    if _debug_m:
         from debug_keyword import debug_keyword
-        needle = text.split(' ', 1)[1].strip()
-        return debug_keyword(needle)
+        return debug_keyword(_debug_m.group(1).strip())
 
     if text in ('記錄加油', '紀錄加油', '加油', '新增加油'):
         db.set_state(user_id, 'waiting_fuel_mileage', None, None)
