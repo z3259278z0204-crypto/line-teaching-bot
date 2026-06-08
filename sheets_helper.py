@@ -57,13 +57,13 @@ def _read_headers(sheet_name):
     return data.get('values', [[]])[0]
 
 
-def append_row(sheet_name, row_dict):
-    """依分頁標頭順序追加一列"""
+def append_row(sheet_name, row_dict, value_input='USER_ENTERED'):
+    """依分頁標頭順序追加一列。value_input 可設 'RAW' 讓值原樣存成文字（不被當日期/數字解析）。"""
     sid = _spreadsheet_id()
     headers = _read_headers(sheet_name)
     row = [str(row_dict.get(h, '')) for h in headers]
     rng = urllib.parse.quote(sheet_name)
-    url = f'{SHEETS_BASE}/{sid}/values/{rng}:append?valueInputOption=USER_ENTERED'
+    url = f'{SHEETS_BASE}/{sid}/values/{rng}:append?valueInputOption={value_input}'
     return _request(url, method='POST', body={'values': [row]})
 
 

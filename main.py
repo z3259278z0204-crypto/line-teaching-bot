@@ -25,6 +25,7 @@ from salary import monthly_summary, list_prices, monthly_chart
 from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance, oil_change_warning, delete_last_fuel
 from parking import save_parking, monthly_summary as parking_monthly_summary, monthly_total as parking_monthly_total, delete_last_parking
 from ledger import save_entry as ledger_save_entry, monthly_summary as ledger_monthly_summary, delete_last_entry as ledger_delete_last, EXPENSE_CATEGORIES, INCOME_CATEGORIES
+import equipment as equip
 
 app = Flask(__name__)
 configuration = Configuration(access_token=os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -42,6 +43,12 @@ def ping():
 def setup_richmenu():
     from rich_menu import setup
     return setup(), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+
+@app.route('/equipment/today')
+def equipment_today():
+    """午夜通知用：回傳今天要帶的器材（沒有則空字串）。"""
+    return {'items': equip.get_equipment(equip.today_date())}
 
 
 @app.route('/sync')
@@ -213,6 +220,9 @@ def process(user_id, text):
             '🔸 查第3週 / 查5/14\n'
             '🔸 匯出Excel → 下載連結\n'
             '🔸 刪除最後一筆\n\n'
+            '🎒 明日器材（午夜通知會提醒帶）\n'
+            '🔸 明日器材 → 問答設定明天要帶什麼\n'
+            '🔸 明日器材 呼拉圈,平衡木 → 一句話設定\n\n'
             '🤖 AI 助理\n'
             '🔸 直接說任何問題，AI 自動回答'
         )
@@ -355,6 +365,20 @@ def process(user_id, text):
                     '新增行程 5/20 下午3點 家長會 地點：學校')
         return add_event(raw)
 
+    # 明日器材：設定隔天上課要帶的器材，午夜通知會自動帶出
+    m_eq = re.match(r'^(明日器材|設定明日器材|設定器材|器材設定|明天器材)[\s　]*(.*)$', text)
+    if m_eq:
+        items = m_eq.group(2).strip()
+        d = equip.tomorrow_date()
+        if items:  # 一句話直接設定：明日器材 呼拉圈,平衡木
+            equip.set_equipment(d, items)
+            return f'✅ 已設定 {equip.label(d)} 要帶的器材：\n🧰 {items}\n\n午夜通知會自動提醒你帶 😊'
+        db.set_state(user_id, 'waiting_equipment_items', d.strftime('%Y-%m-%d'), None)
+        existing = equip.get_equipment(d)
+        cur = f'目前已設定：{existing}\n\n' if existing else ''
+        return (f'🧰 設定 {equip.label(d)} 要帶的器材\n\n{cur}'
+                '請直接輸入，多項用逗號分隔，例如：\n呼拉圈,平衡木,角錐\n（說「取消」中止）')
+
     if (text in ('新增', '新增教具', '新增器材', 'start')
             or text.startswith(('記錄', '紀錄'))):
         db.set_state(user_id, 'waiting_week', None, None)
@@ -419,6 +443,18 @@ def process(user_id, text):
             return '⚠️ 編號超出範圍，已取消。'
         db.clear_state(user_id)
         return '已取消刪除。'
+
+    if state == 'waiting_equipment_items':
+        d_str = db.get_temp_week(user_id)
+        items = text.strip()
+        try:
+            d = datetime.strptime(d_str, '%Y-%m-%d').date()
+            equip.set_equipment(d, items)
+        except Exception as ex:
+            db.clear_state(user_id)
+            return f'⚠️ 寫入失敗：{ex}'
+        db.clear_state(user_id)
+        return f'✅ 已設定 {equip.label(d)} 要帶的器材：\n🧰 {items}\n\n午夜通知會自動提醒你帶 😊'
 
     if state == 'waiting_fuel_mileage':
         try:
