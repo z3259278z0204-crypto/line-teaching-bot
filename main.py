@@ -51,6 +51,16 @@ def equipment_today():
     return {'items': equip.get_equipment(equip.today_date())}
 
 
+@app.route('/equipment/all')
+def equipment_all():
+    """診斷用：回傳「明日器材」分頁所有資料。"""
+    from sheets_helper import read_all
+    try:
+        return {'today': str(equip.today_date()), 'rows': read_all('明日器材')}
+    except Exception as e:
+        return {'error': str(e)}
+
+
 @app.route('/sync')
 def sync_endpoint():
     import traceback
