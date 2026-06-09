@@ -11,7 +11,7 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi,
-    ReplyMessageRequest, TextMessage, ImageMessage
+    ReplyMessageRequest, PushMessageRequest, TextMessage, ImageMessage
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from database import Database
@@ -59,6 +59,27 @@ def equipment_all():
         return {'today': str(equip.today_date()), 'rows': read_all('明日器材')}
     except Exception as e:
         return {'error': str(e)}
+
+
+@app.route('/equipment/ask')
+def equipment_ask():
+    """每晚由 Worker 排程呼叫：主動詢問明天器材，並讓使用者下一句回覆被存起來。"""
+    user_id = request.args.get('user', '').strip()
+    if not user_id:
+        return {'error': 'no user'}, 400
+    d = equip.tomorrow_date()
+    db.set_state(user_id, 'waiting_equipment_items', d.strftime('%Y-%m-%d'), None)
+    msg = (f'🎒 明天 {equip.label(d)} 上課要帶什麼器材？\n\n'
+           '直接回我，多項用逗號分隔，例如：\n梯椅,呼拉圈,角錐\n'
+           '（不用帶就回「無」）')
+    try:
+        with ApiClient(configuration) as api_client:
+            MessagingApi(api_client).push_message(
+                PushMessageRequest(to=user_id, messages=[TextMessage(text=msg)])
+            )
+    except Exception as e:
+        return {'error': str(e)}
+    return {'ok': True}
 
 
 @app.route('/sync')
@@ -456,9 +477,17 @@ def process(user_id, text):
 
     if state == 'waiting_equipment_items':
         d_str = db.get_temp_week(user_id)
-        items = text.strip()
         try:
             d = datetime.strptime(d_str, '%Y-%m-%d').date()
+        except Exception:
+            db.clear_state(user_id)
+            return '⚠️ 設定狀態異常，請重新說「明日器材」。'
+        items = text.strip()
+        try:
+            if items in ('無', '不用', '沒有', '跳過', '不帶', '不用帶'):
+                equip.set_equipment(d, '')  # 清空當天，午夜通知就不顯示器材
+                db.clear_state(user_id)
+                return f'好的，{equip.label(d)} 不用帶器材 👌'
             equip.set_equipment(d, items)
         except Exception as ex:
             db.clear_state(user_id)
