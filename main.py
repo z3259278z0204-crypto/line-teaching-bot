@@ -39,6 +39,24 @@ def ping():
     return 'pong', 200
 
 
+@app.route('/report/salary')
+def report_salary():
+    """跨 bot 回報窗口：給練食記(gymeats)接本月工作淨收支。需 token 保護。
+    範例：/report/salary?token=XXX（可帶 &year=2026&month=7 查指定月）。"""
+    token = request.args.get('token', '')
+    expected = os.environ.get('REPORT_TOKEN', '')
+    if not expected or token != expected:
+        return {'ok': False, 'error': 'unauthorized'}, 403
+    try:
+        from salary import monthly_net
+        y = request.args.get('year')
+        m = request.args.get('month')
+        data = monthly_net(int(y) if y else None, int(m) if m else None)
+        return {'ok': True, **data}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}, 500
+
+
 @app.route('/setup-richmenu')
 def setup_richmenu():
     from rich_menu import setup

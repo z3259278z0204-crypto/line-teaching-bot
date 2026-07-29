@@ -92,6 +92,54 @@ def monthly_summary(year=None, month=None):
     return '\n'.join(lines)
 
 
+def monthly_net(year=None, month=None):
+    """回傳本月工作收支數字明細（給練食記跨 bot 接的結構化資料）。
+    net＝毛薪＋記帳收入 − 油費 − 停車 − 記帳支出（含記帳收入，比薪資摘要顯示更完整）。"""
+    now = datetime.now(TAIWAN_TZ)
+    year = year or now.year
+    month = month or now.month
+
+    gross = 0
+    lessons = 0
+    for row in read_all('薪資'):
+        d = _parse_date(row.get('日期'))
+        if not d or d.year != year or d.month != month:
+            continue
+        try:
+            price = int(str(row.get('單價', '')).strip())
+        except (ValueError, TypeError):
+            continue
+        n = _lessons_of(row)
+        gross += price * n
+        lessons += n
+
+    try:
+        fuel_amt, _, _ = fuel_monthly_total(year, month)
+    except Exception:
+        fuel_amt = 0
+    try:
+        park_amt, _ = parking_monthly_total(year, month)
+    except Exception:
+        park_amt = 0
+    try:
+        ledger_exp, ledger_inc = ledger_monthly_total(year, month)
+    except Exception:
+        ledger_exp, ledger_inc = 0, 0
+
+    net = gross + ledger_inc - fuel_amt - park_amt - ledger_exp
+    return {
+        'year': year,
+        'month': month,
+        'lessons': lessons,
+        'salary_gross': gross,
+        'ledger_income': ledger_inc,
+        'fuel': fuel_amt,
+        'parking': park_amt,
+        'ledger_expense': ledger_exp,
+        'net': net,
+    }
+
+
 def monthly_chart(year=None, month=None):
     """文字長條圖呈現月薪資。"""
     now = datetime.now(TAIWAN_TZ)
