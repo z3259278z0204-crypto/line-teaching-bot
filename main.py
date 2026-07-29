@@ -11,7 +11,8 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi,
-    ReplyMessageRequest, PushMessageRequest, TextMessage, ImageMessage
+    ReplyMessageRequest, PushMessageRequest, TextMessage, ImageMessage,
+    FlexMessage, FlexContainer
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from database import Database
@@ -21,7 +22,7 @@ from calendar_query import query_schedule, query_schedule_date
 from calendar_add import add_event
 from calendar_delete import list_upcoming, delete_event, find_and_delete
 from ai_chat import ask_ai
-from salary import monthly_summary, list_prices, monthly_chart
+from salary import monthly_summary, monthly_summary_flex, list_prices, monthly_chart
 from fuel import save_fuel, monthly_summary as fuel_monthly_summary, monthly_total as fuel_monthly_total, last_fill_performance, oil_change_warning, delete_last_fuel
 from parking import save_parking, monthly_summary as parking_monthly_summary, monthly_total as parking_monthly_total, delete_last_parking
 from ledger import save_entry as ledger_save_entry, monthly_summary as ledger_monthly_summary, delete_last_entry as ledger_delete_last, EXPENSE_CATEGORIES, INCOME_CATEGORIES
@@ -145,6 +146,11 @@ def _reply_async(event):
                 originalContentUrl=reply['image_url'],
                 previewImageUrl=reply['image_url'],
             ))
+        elif isinstance(reply, dict) and reply.get('type') == 'flex':
+            messages = [FlexMessage(
+                alt_text=reply['alt_text'],
+                contents=FlexContainer.from_dict(reply['bubble']),
+            )]
         else:
             messages = [TextMessage(text=reply)]
 
@@ -239,6 +245,17 @@ def _send_salary_chart(year=None, month=None):
         return f'⚠️ 圖表產生失敗 [v7 py={sys.version_info.major}.{sys.version_info.minor}]\n\n=頭=\n{head}\n\n=尾=\n{tail}\n\n（已退回文字版）\n\n' + monthly_chart(year, month)
 
 
+def _salary_reply(year=None, month=None):
+    """薪資摘要優先回 Flex 卡；沒資料或出錯則退回原本的文字摘要。"""
+    try:
+        card = monthly_summary_flex(year, month)
+        if card:
+            return {'type': 'flex', 'alt_text': card['alt_text'], 'bubble': card['bubble']}
+    except Exception:
+        traceback.print_exc()
+    return monthly_summary(year, month)
+
+
 def process(user_id, text):
     text_lower = text.lower()
 
@@ -277,12 +294,12 @@ def process(user_id, text):
         )
 
     if text in ('本月薪資', '薪資', '這個月薪資', '查薪資', '看薪資', '本月收入'):
-        return monthly_summary()
+        return _salary_reply()
 
     if text in ('上月薪資', '上個月薪資', '查上月薪資'):
         now = datetime.now(TAIWAN_TZ)
         prev = now.replace(day=1) - timedelta(days=1)
-        return monthly_summary(prev.year, prev.month)
+        return _salary_reply(prev.year, prev.month)
 
     if text in ('價目表', '查價', '價格', '看價目表', '看價格', '查價目表'):
         return list_prices()
@@ -295,7 +312,7 @@ def process(user_id, text):
     if parsed:
         y, m, rest = parsed
         if rest in ('薪資', '收入', '查薪資', '看薪資', '本月薪資'):
-            return monthly_summary(y, m)
+            return _salary_reply(y, m)
         if rest in ('圖表', '視覺化', '薪資圖表', '薪資視覺化', '本月圖表'):
             return _send_salary_chart(y, m)
 
@@ -442,11 +459,11 @@ def process(user_id, text):
     if text.startswith('查') and len(text) > 1:
         keyword = text[1:].strip()
         if keyword in ('薪資', '本月薪資', '本月收入', '收入', '這個月薪資'):
-            return monthly_summary()
+            return _salary_reply()
         if keyword in ('上月薪資', '上個月薪資'):
             now = datetime.now(TAIWAN_TZ)
             prev = now.replace(day=1) - timedelta(days=1)
-            return monthly_summary(prev.year, prev.month)
+            return _salary_reply(prev.year, prev.month)
         if keyword in ('價目表', '價格'):
             return list_prices()
         if keyword in ('加油', '本月加油', '油費'):

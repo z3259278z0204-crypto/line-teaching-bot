@@ -140,6 +140,67 @@ def monthly_net(year=None, month=None):
     }
 
 
+def _flex_row(icon, label, value, color):
+    """薪資卡的一列：左 icon＋標籤、右金額（帶色）。"""
+    return {
+        'type': 'box', 'layout': 'horizontal',
+        'contents': [
+            {'type': 'text', 'text': f'{icon}  {label}', 'size': 'sm', 'color': '#555555', 'flex': 5},
+            {'type': 'text', 'text': value, 'size': 'sm', 'color': color, 'align': 'end', 'flex': 4, 'weight': 'bold'},
+        ],
+    }
+
+
+def monthly_summary_flex(year=None, month=None):
+    """把薪資摘要做成 Flex 卡（與練食記同風格）。沒資料回 None，讓呼叫端退回文字。
+    淨薪＝毛薪−油費−停車−記帳支出（比照文字摘要，不含記帳收入，決策B）。"""
+    d = monthly_net(year, month)
+    y, m = d['year'], d['month']
+    gross, fuel, park, ledger_exp, lessons = (
+        d['salary_gross'], d['fuel'], d['parking'], d['ledger_expense'], d['lessons']
+    )
+    if lessons == 0 and gross == 0:
+        return None
+    net = gross - fuel - park - ledger_exp
+
+    rows = [
+        {'type': 'separator', 'margin': 'lg'},
+        _flex_row('📚', f'教課 {lessons} 堂', f'+${gross:,}', '#1F7A5A'),
+    ]
+    if fuel > 0:
+        rows.append(_flex_row('⛽', '油費', f'−${fuel:,}', '#C0392B'))
+    if park > 0:
+        rows.append(_flex_row('🅿️', '停車', f'−${park:,}', '#C0392B'))
+    if ledger_exp > 0:
+        rows.append(_flex_row('📒', '記帳支出', f'−${ledger_exp:,}', '#C0392B'))
+
+    bubble = {
+        'type': 'bubble',
+        'header': {
+            'type': 'box', 'layout': 'vertical',
+            'contents': [
+                {'type': 'text', 'text': f'{y}/{m:02d} 薪資', 'weight': 'bold', 'size': 'lg', 'color': '#FFFFFF'},
+                {'type': 'text', 'text': '教課 × 工作支出', 'size': 'xs', 'color': '#FFFFFFCC'},
+            ],
+            'backgroundColor': '#1F7A5A', 'paddingAll': '16px',
+        },
+        'body': {
+            'type': 'box', 'layout': 'vertical', 'spacing': 'sm', 'paddingAll': '16px',
+            'contents': [
+                {
+                    'type': 'box', 'layout': 'vertical', 'spacing': 'xs',
+                    'contents': [
+                        {'type': 'text', 'text': '本月淨薪', 'size': 'sm', 'color': '#8C8C8C'},
+                        {'type': 'text', 'text': f'${net:,}', 'size': '3xl', 'weight': 'bold', 'color': '#1F7A5A', 'wrap': True},
+                    ],
+                },
+                *rows,
+            ],
+        },
+    }
+    return {'alt_text': f'{y}/{m:02d} 淨薪 ${net:,}', 'bubble': bubble}
+
+
 def monthly_chart(year=None, month=None):
     """文字長條圖呈現月薪資。"""
     now = datetime.now(TAIWAN_TZ)
